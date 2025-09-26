@@ -24,6 +24,6 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: 🚀 Ejecutar Script Maestro
-      working-directory: ${{ github.workspace }}  # <-- Asegura trabajar en la carpeta del repo
-      run: python3 script_maestro.py
+    - name: 🚀 Ejecutar Ejecucion_completa.py
+      working-directory: ${{ github.workspace }}
+      run: python3 Ejecucion_completa.py
