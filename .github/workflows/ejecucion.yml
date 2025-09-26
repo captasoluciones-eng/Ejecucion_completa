@@ -2,8 +2,8 @@ name: Ejecutar notebook cada hora
 
 on:
   schedule:
-    - cron: "0 * * * *"  # cada hora en el minuto 0
-  workflow_dispatch:     # permite ejecutarlo manualmente
+    - cron: "0 * * * *"
+  workflow_dispatch:
 
 jobs:
   run-notebook:
@@ -33,4 +33,3 @@ jobs:
           git add Ejecucion_salida.ipynb
           git commit -m "Notebook ejecutado automáticamente"
           git push
-
