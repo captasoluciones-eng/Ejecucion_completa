@@ -24,6 +24,6 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: 🚀 Ejecutar Ejecucion_completa.py
+    - name: 🚀 Ejecutar ejecucion_completa.py
       working-directory: ${{ github.workspace }}
-      run: python3 Ejecucion_completa.py
+      run: python3 ejecucion_completa.py
