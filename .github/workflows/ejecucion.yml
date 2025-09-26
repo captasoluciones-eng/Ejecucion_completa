@@ -1,11 +1,12 @@
 name: Ejecutar Notebook
 
 on:
-  workflow_dispatch:  # Esto permite ejecutarlo manualmente desde Actions
+  workflow_dispatch:
 
 jobs:
   run-notebook:
     runs-on: ubuntu-latest
+
     steps:
       - name: Descargar repo
         uses: actions/checkout@v4
@@ -13,8 +14,12 @@ jobs:
       - name: Instalar papermill
         run: pip install papermill
 
-      - name: Listar archivos para depuración
+      - name: Listar archivos
         run: ls -R
 
-      - name: Ejecutar Notebook
-        run: papermill "Colab Notebook/Ejecucion completa.ipynb" "Colab Notebook/Ejecucion_salida.ipynb"
+      - name: Ejecutar notebook con papermill
+        run: |
+          papermill "Colab Notebook/Ejecucion_completa.ipynb" "Colab Notebook/Ejecucion_salida.ipynb"
+
+      - name: Listar salida
+        run: ls "Colab Notebook"
