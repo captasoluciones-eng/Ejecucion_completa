@@ -19,7 +19,7 @@ jobs:
 
       - name: Ejecutar notebook con papermill
         run: |
-          papermill "Colab Notebook/Ejecucion_completa.ipynb" "Colab Notebook/Ejecucion_salida.ipynb"
+          papermill "Ejecucion_completa.ipynb" "Ejecucion_salida.ipynb"
 
       - name: Listar salida
-        run: ls "Colab Notebook"
+        run: ls
