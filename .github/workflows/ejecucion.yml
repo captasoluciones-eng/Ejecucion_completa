@@ -1,7 +1,9 @@
 name: Ejecutar Notebook
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # ejecución manual
+  schedule:
+    - cron: "0 * * * *"   # cada hora
 
 jobs:
   run-notebook:
@@ -13,19 +15,16 @@ jobs:
 
       - name: Instalar dependencias
         run: |
-          python -m pip install --upgrade pip
-          pip install papermill notebook ipykernel
-
-      - name: Registrar kernel
-        run: |
-          python -m ipykernel install --user --name python3 --display-name "Python 3"
-
-      - name: Listar archivos
-        run: ls -R
+          pip install jupyter papermill nbconvert
 
       - name: Ejecutar notebook con papermill
         run: |
           papermill "Ejecucion_completa.ipynb" "Ejecucion_salida.ipynb"
 
-      - name: Listar salida
-        run: ls
+      - name: Guardar salida en repo
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+          git add Ejecucion_salida.ipynb
+          git commit -m "Notebook ejecutado automáticamente"
+          git push
