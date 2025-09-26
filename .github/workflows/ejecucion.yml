@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:  # Permite ejecución manual
+  workflow_dispatch:
 
 jobs:
   run-scripts:
@@ -25,5 +25,5 @@ jobs:
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
     - name: 🚀 Ejecutar Script Maestro
-      run: |
-        python3 script_maestro.py
+      working-directory: ${{ github.workspace }}  # <-- Asegura trabajar en la carpeta del repo
+      run: python3 script_maestro.py
