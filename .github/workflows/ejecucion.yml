@@ -2,30 +2,35 @@ name: Ejecutar notebook cada hora
 
 on:
   schedule:
-    - cron: "0 * * * *"  # Ejecutar cada hora en el minuto 0
-  workflow_dispatch:     # Permite ejecutar manualmente
+    - cron: "0 * * * *"   # Se ejecuta cada hora
+  workflow_dispatch:       # Permite ejecutar manualmente desde Actions
 
 jobs:
   run-notebook:
     runs-on: ubuntu-latest
 
     steps:
+      # Paso 1: Clonar el repositorio
       - name: Checkout repo
         uses: actions/checkout@v3
 
+      # Paso 2: Configurar Python
       - name: Configurar Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.10"
 
+      # Paso 3: Instalar dependencias
       - name: Instalar dependencias
         run: |
           pip install jupyter nbconvert papermill
 
+      # Paso 4: Ejecutar notebook
       - name: Ejecutar notebook con Papermill
         run: |
           papermill "Ejecucion completa.ipynb" "Ejecucion_salida.ipynb"
 
+      # Paso 5: Subir resultado al repo
       - name: Guardar resultado en repo
         run: |
           git config --global user.name "github-actions"
