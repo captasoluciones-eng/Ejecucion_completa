@@ -11,8 +11,14 @@ jobs:
       - name: Descargar repo
         uses: actions/checkout@v4
 
-      - name: Instalar papermill
-        run: pip install papermill
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install papermill notebook ipykernel
+
+      - name: Registrar kernel
+        run: |
+          python -m ipykernel install --user --name python3 --display-name "Python 3"
 
       - name: Listar archivos
         run: ls -R
