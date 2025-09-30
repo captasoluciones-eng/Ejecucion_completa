@@ -4,7 +4,9 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch:
+  workflow_dispatch:       # Permite lanzarlo manualmente
+  schedule:                # Lo lanza automático cada hora
+    - cron: "0 * * * *"
 
 jobs:
   run-scripts:
