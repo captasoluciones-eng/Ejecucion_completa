@@ -1,12 +1,9 @@
 name: Ejecutar scripts Python
 
 on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:       # Permite lanzarlo manualmente
-  schedule:                # Lo lanza automático cada hora
-    - cron: "0 * * * *"
+  schedule:
+    - cron: "0 * * * *"  # ⏰ Cada hora
+  workflow_dispatch:
 
 jobs:
   run-scripts:
@@ -24,8 +21,15 @@ jobs:
     - name: 📦 Instalar dependencias
       run: |
         python -m pip install --upgrade pip
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        pip install pandas google-cloud-bigquery gdown
+
+    - name: 🔐 Crear archivo de credenciales
+      run: |
+        echo "$GCP_CREDENTIALS" > ${HOME}/gcp_credentials.json
+      env:
+        GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
 
     - name: 🚀 Ejecutar ejecucion_completa.py
-      working-directory: ${{ github.workspace }}
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: "${HOME}/gcp_credentials.json"
       run: python3 ejecucion_completa.py
