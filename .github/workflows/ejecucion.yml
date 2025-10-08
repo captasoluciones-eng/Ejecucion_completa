@@ -1,9 +1,12 @@
-name: Ejecutar scripts Python
+name: Ejecutar scripts Python cada hora
 
 on:
   schedule:
-    - cron: "0 * * * *"  # ⏰ Cada hora
+    - cron: "0 * * * *"  # 🔁 Ejecutar cada hora (UTC)
   workflow_dispatch:
+  push:
+    branches:
+      - main
 
 jobs:
   run-scripts:
@@ -21,15 +24,19 @@ jobs:
     - name: 📦 Instalar dependencias
       run: |
         python -m pip install --upgrade pip
-        pip install pandas google-cloud-bigquery gdown
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: 🔐 Crear archivo de credenciales
-      run: |
-        echo "$GCP_CREDENTIALS" > ${HOME}/gcp_credentials.json
+    - name: 🔐 Configurar credenciales de Google Cloud
       env:
         GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+      run: |
+        echo "$GCP_CREDENTIALS" > $HOME/gcp_credentials.json
+        export GOOGLE_APPLICATION_CREDENTIALS="$HOME/gcp_credentials.json"
+        gcloud auth activate-service-account --key-file=$GOOGLE_APPLICATION_CREDENTIALS || echo "gcloud no está instalado, se usará autenticación por variable"
 
     - name: 🚀 Ejecutar ejecucion_completa.py
       env:
-        GOOGLE_APPLICATION_CREDENTIALS: "${HOME}/gcp_credentials.json"
-      run: python3 ejecucion_completa.py
+        GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/gcp_credentials.json
+      run: |
+        echo "$GCP_CREDENTIALS" > ${{ runner.temp }}/gcp_credentials.json
+        python3 ejecucion_completa.py
