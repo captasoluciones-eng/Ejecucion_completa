@@ -31,7 +31,7 @@ jobs:
           export_default_credentials: true
 
       - name: 🚀 Ejecutar creditosactivos10.py
-        run: python3 creditosactivos10.py
+        run: python3 scripts/creditosactivos10.py
 
       - name: ✅ Confirmar finalización
         run: echo "Script creditosactivos10.py finalizado correctamente"
