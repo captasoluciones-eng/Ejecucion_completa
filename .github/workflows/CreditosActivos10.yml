@@ -1,7 +1,7 @@
 name: Ejecutar creditosactivos10
 
 on:
-  workflow_dispatch: # Permite ejecutarlo manualmente desde GitHub Actions
+  workflow_dispatch:
 
 jobs:
   run-creditosactivos10:
