@@ -21,7 +21,8 @@ jobs:
 
       - name: 🔑 Cargar credenciales GCP
         run: |
-          printf "%s" "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_credentials.json
+          echo "${{ secrets.GCP_CREDENTIALS_B64 }}" | base64 --decode > $HOME/gcp_credentials.json 
+          cat $HOME/gcp_credentials.json
 
       - name: 🛠 Activar credenciales GCP
         run: |
