@@ -21,13 +21,16 @@ jobs:
 
       - name: 🔑 Cargar credenciales GCP
         run: |
-          echo "${{ secrets.GCP_CREDENTIALS_B64 }}" | base64 --decode > $HOME/gcp_credentials.json 
+          echo "${{ secrets.GCP_CREDENTIALS_B64 }}" | base64 --decode > $HOME/gcp_credentials.json
           cat $HOME/gcp_credentials.json
 
       - name: 🛠 Activar credenciales GCP
         run: |
           gcloud auth activate-service-account --key-file=$HOME/gcp_credentials.json
           gcloud auth list
+
+      - name: 🛠 Configurar proyecto de GCP
+        run: gcloud config set project lookerstudio-consolidacion
 
       - name: 🧭 Mostrar contenido del directorio
         run: |
