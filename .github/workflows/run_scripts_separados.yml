@@ -16,8 +16,12 @@ jobs:
       with:
         python-version: '3.12'
 
+    - name: Instalar jq
+      run: sudo apt-get update && sudo apt-get install -y jq
+
     - name: Guardar credenciales GCP
-      run: | echo "${{ secrets.GCP_CREDENTIALS }}" | jq . > $HOME/gcp_credentials.json
+      run: |
+        echo "${{ secrets.GCP_CREDENTIALS }}" | jq . > $HOME/gcp_credentials.json
 
     - name: Activar credenciales GCP
       run: gcloud auth activate-service-account --key-file=$HOME/gcp_credentials.json
