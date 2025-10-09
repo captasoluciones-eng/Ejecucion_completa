@@ -36,7 +36,6 @@ jobs:
 
     - name: 🚀 Ejecutar ejecucion_completa.py
       env:
-        GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/gcp_credentials.json
+        GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
       run: |
-        echo "$GCP_CREDENTIALS" > ${{ runner.temp }}/gcp_credentials.json
         python3 ejecucion_completa.py
