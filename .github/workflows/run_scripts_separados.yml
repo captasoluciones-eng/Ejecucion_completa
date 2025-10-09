@@ -1,0 +1,37 @@
+name: Ejecutar scripts por separado
+
+on:
+  workflow_dispatch:
+
+jobs:
+  run-scripts:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout del repositorio
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: 3.12
+
+      - name: Actualizar pip
+        run: python -m pip install --upgrade pip
+
+      - name: Autenticar con GCP
+        run: |
+          echo "$GCP_CREDENTIALS" > $HOME/gcp_credentials.json
+          gcloud auth activate-service-account --key-file=$HOME/gcp_credentials.json
+
+      - name: Ejecutar CreditosActivos10.py
+        run: python CreditosActivos10.py
+
+      - name: Ejecutar Rentabilidad.py
+        run: python Rentabilidad.py
+
+      - name: Ejecutar Detallado de Canje.py
+        run: python "Detallado de Canje.py"
+
+      - name: Ejecutar Kpis's.py
+        run: python "Kpis's.py"
