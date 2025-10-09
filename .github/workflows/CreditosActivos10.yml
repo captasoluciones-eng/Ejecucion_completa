@@ -35,8 +35,8 @@ jobs:
           pwd
           ls -R
 
-      - name: 🚀 Ejecutar creditosactivos10.py
-        run: python3 creditosactivos10.py
+      - name: 🚀 Ejecutar CreditosActivos10.py
+        run: python3 "CreditosActivos10.py"
 
       - name: ✅ Confirmar finalización
         run: echo "Script creditosactivos10.py finalizado correctamente"
