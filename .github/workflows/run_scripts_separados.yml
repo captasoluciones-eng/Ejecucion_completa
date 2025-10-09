@@ -17,7 +17,7 @@ jobs:
         python-version: '3.12'
 
     - name: Guardar credenciales GCP
-      run: echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_credentials.json
+      run: | echo "${{ secrets.GCP_CREDENTIALS }}" | jq . > $HOME/gcp_credentials.json
 
     - name: Activar credenciales GCP
       run: gcloud auth activate-service-account --key-file=$HOME/gcp_credentials.json
