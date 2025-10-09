@@ -9,29 +9,33 @@ jobs:
 
     steps:
       - name: 📥 Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v3
 
       - name: 🐍 Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: "3.12"
 
       - name: 📦 Upgrade pip
         run: python -m pip install --upgrade pip
 
-      - name: 🔑 Crear archivo de credenciales GCP
+      - name: 🔑 Cargar credenciales GCP
         run: |
-          echo "${{ secrets.GCP_CREDENTIALS_B64 }}" | base64 --decode > $HOME/gcp_credentials.json
+          printf "%s" "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_credentials.json
 
-      - name: ☁️ Instalar Google Cloud SDK
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          project_id: lookerstudio-consolidacion
-          service_account_key: ${{ secrets.GCP_CREDENTIALS_B64 }}
-          export_default_credentials: true
+      - name: 🛠 Activar credenciales GCP
+        run: |
+          gcloud auth activate-service-account --key-file=$HOME/gcp_credentials.json
+          gcloud auth list
+
+      - name: 🧭 Mostrar contenido del directorio
+        run: |
+          echo "Contenido actual del directorio:"
+          pwd
+          ls -R
 
       - name: 🚀 Ejecutar creditosactivos10.py
-        run: python3 scripts/creditosactivos10.py
+        run: python3 creditosactivos10.py
 
       - name: ✅ Confirmar finalización
         run: echo "Script creditosactivos10.py finalizado correctamente"
