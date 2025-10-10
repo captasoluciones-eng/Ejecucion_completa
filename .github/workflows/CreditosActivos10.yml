@@ -19,6 +19,9 @@ jobs:
       - name: 📦 Upgrade pip
         run: python -m pip install --upgrade pip
 
+      - name: 📦 Instalar dependencias
+        run: pip install pandas gdown google-cloud-bigquery
+
       - name: 🔑 Cargar credenciales GCP
         run: |
           echo "${{ secrets.GCP_CREDENTIALS_B64 }}" | base64 --decode > $HOME/gcp_credentials.json
@@ -40,9 +43,7 @@ jobs:
           ls -R
 
       - name: 🚀 Ejecutar CreditosActivos10.py
-        run: python3 "CreditosActivos10.py"
-        env:
-          GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
+        run: python3 -u "CreditosActivos10.py"
 
       - name: ✅ Confirmar finalización
         run: echo "Script creditosactivos10.py finalizado correctamente"
