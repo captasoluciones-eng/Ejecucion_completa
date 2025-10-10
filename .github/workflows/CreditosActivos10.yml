@@ -22,7 +22,8 @@ jobs:
       - name: 🔑 Cargar credenciales GCP
         run: |
           echo "${{ secrets.GCP_CREDENTIALS_B64 }}" | base64 --decode > $HOME/gcp_credentials.json
-          cat $HOME/gcp_credentials.json
+          echo "✅ Credenciales guardadas en $HOME/gcp_credentials.json"
+          ls -l $HOME/gcp_credentials.json
 
       - name: 🛠 Activar credenciales GCP
         run: |
@@ -40,6 +41,8 @@ jobs:
 
       - name: 🚀 Ejecutar CreditosActivos10.py
         run: python3 "CreditosActivos10.py"
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
 
       - name: ✅ Confirmar finalización
         run: echo "Script creditosactivos10.py finalizado correctamente"
