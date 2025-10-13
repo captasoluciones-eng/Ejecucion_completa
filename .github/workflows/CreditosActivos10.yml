@@ -21,7 +21,7 @@ jobs:
 
       - name: 🔑 Cargar credenciales GCP
         run: |
-          echo "${{ secrets.GCP_CREDENTIALS_B64 }}" | base64 --decode > $HOME/gcp_credentials.json
+          echo '${{ secrets.GCP_CREDENTIALS }}' > $HOME/gcp_credentials.json
           echo "✅ Credenciales guardadas en $HOME/gcp_credentials.json"
           ls -l $HOME/gcp_credentials.json
 
