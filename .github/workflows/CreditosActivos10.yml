@@ -2,6 +2,8 @@ name: Ejecutar creditosactivos10
 
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "0 * * * *"  # Ejecutar cada hora
 
 jobs:
   run-creditosactivos10:
@@ -24,12 +26,6 @@ jobs:
           echo '${{ secrets.GCP_CREDENTIALS }}' > $HOME/gcp_credentials.json
           echo "✅ Credenciales guardadas en $HOME/gcp_credentials.json"
           ls -l $HOME/gcp_credentials.json
-
-      - name: 🛠 Activar credenciales GCP
-        run: |
-          gcloud auth activate-service-account --key-file=$HOME/gcp_credentials.json
-          gcloud config set project lookerstudio-consolidacion
-          gcloud auth list
 
       - name: 📦 Instalar dependencias necesarias
         run: |
