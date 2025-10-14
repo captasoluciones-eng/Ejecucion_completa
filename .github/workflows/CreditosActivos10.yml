@@ -1,23 +1,46 @@
-- name: Guardar credenciales GCP
-  run: |
-    echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_credentials.json
+name: Carga CreditosActivos10 a BigQuery
 
-- name: Ejecutar CreditosActivos10
-  env:
-    GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
-  run: |
-    python3 << EOF
+on:
+  workflow_dispatch: # Permite ejecutarlo manualmente
+  schedule:
+    - cron: "0 6 * * *" # Se ejecuta todos los días a las 6:00 UTC (ajústalo si quieres)
+
+jobs:
+  upload-to-bigquery:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Configurar Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.12'
+
+      - name: Instalar dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas gdown google-cloud-bigquery
+
+      - name: Guardar credenciales GCP
+        run: |
+          echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_credentials.json
+        # Asegúrate de que GCP_CREDENTIALS sea tu JSON completo en GitHub Secrets
+
+      - name: Ejecutar script CreditosActivos10
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
+        run: |
+          python3 << 'EOF'
 import os
 import pandas as pd
 import gdown
 from io import BytesIO
 from google.cloud import bigquery
 
-# Expandir la ruta de credenciales
+# Ruta de credenciales
 cred_path = os.path.expanduser(os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 print(f"🔑 Usando credenciales: {cred_path}")
 
-# Cliente BigQuery
+# Crear cliente BigQuery explícitamente con JSON
 client = bigquery.Client.from_service_account_json(cred_path)
 
 # Descargar CSV en memoria
@@ -32,12 +55,13 @@ df = pd.read_csv(csv_buffer, sep=",", on_bad_lines="skip", low_memory=False, enc
 df.columns = df.columns.str.strip().str.replace(" ", "_").str.replace(r"[^a-zA-Z0-9_]", "", regex=True)
 print(f"✅ CSV leído correctamente. Filas: {len(df)} | Columnas: {len(df.columns)}")
 
-# Subir a BigQuery
+# Configurar BigQuery
 proyecto_bq = "lookerstudio-consolidacion"
 dataset_bq = "DatosLooker_USC"
 tabla_bq = "Full"
 tabla_destino = f"{proyecto_bq}.{dataset_bq}.{tabla_bq}"
 
+# Subir datos
 job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE", autodetect=True)
 job = client.load_table_from_dataframe(df, tabla_destino, job_config=job_config)
 job.result()
