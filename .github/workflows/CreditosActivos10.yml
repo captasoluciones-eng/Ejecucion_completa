@@ -1,46 +1,65 @@
-name: Ejecutar creditosactivos10
+name: Ejecutar CreditosActivos10
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:   # Permite ejecutarlo manualmente desde GitHub
   schedule:
-    - cron: "0 * * * *"  # Ejecutar cada hora
+    - cron: "0 * * * *"  # ⏰ Ejecutar cada hora (en horario UTC)
 
 jobs:
   run-creditosactivos10:
     runs-on: ubuntu-latest
 
     steps:
+      # --------------------------------------------------
+      # 1️⃣ Descargar el repositorio
+      # --------------------------------------------------
       - name: 📥 Checkout repository
         uses: actions/checkout@v3
 
+      # --------------------------------------------------
+      # 2️⃣ Configurar Python
+      # --------------------------------------------------
       - name: 🐍 Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: "3.12"
 
-      - name: 📦 Upgrade pip
-        run: python -m pip install --upgrade pip
+      # --------------------------------------------------
+      # 3️⃣ Actualizar pip e instalar dependencias
+      # --------------------------------------------------
+      - name: 📦 Instalar dependencias necesarias
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas gdown google-cloud-bigquery pyarrow
 
+      # --------------------------------------------------
+      # 4️⃣ Cargar credenciales de Google Cloud desde secretos
+      # --------------------------------------------------
       - name: 🔑 Cargar credenciales GCP
         run: |
           echo '${{ secrets.GCP_CREDENTIALS }}' > $HOME/gcp_credentials.json
           echo "✅ Credenciales guardadas en $HOME/gcp_credentials.json"
           ls -l $HOME/gcp_credentials.json
 
-      - name: 📦 Instalar dependencias necesarias
-        run: |
-          pip install pandas gdown google-cloud-bigquery pyarrow
-
+      # --------------------------------------------------
+      # 5️⃣ Mostrar contenido del repositorio (debug opcional)
+      # --------------------------------------------------
       - name: 🧭 Mostrar contenido del directorio
         run: |
           echo "📂 Directorio actual:"
           pwd
           ls -R
 
+      # --------------------------------------------------
+      # 6️⃣ Ejecutar el script principal
+      # --------------------------------------------------
       - name: 🚀 Ejecutar CreditosActivos10.py
         env:
           GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
         run: python3 "CreditosActivos10.py"
 
+      # --------------------------------------------------
+      # 7️⃣ Confirmación final
+      # --------------------------------------------------
       - name: ✅ Confirmar finalización
-        run: echo "✅ Script creditosactivos10.py finalizado correctamente"
+        run: echo "🎉 Script CreditosActivos10.py finalizado correctamente"
