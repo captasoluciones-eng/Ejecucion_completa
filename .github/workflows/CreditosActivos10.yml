@@ -1,38 +1,45 @@
-- name: Guardar credenciales GCP
-  run: |
-    echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_credentials.json
+name: CreditosActivos10
 
-- name: Ejecutar CreditosActivos10
-  env:
-    GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
-  run: |
-    python3 << 'EOF'
+on:
+  workflow_dispatch:
+
+jobs:
+  upload:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repo
+      uses: actions/checkout@v3
+
+    - name: Guardar credenciales GCP
+      run: echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_credentials.json
+
+    - name: Ejecutar CreditosActivos10
+      env:
+        GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
+      run: |
+        python3 << 'EOF'
 import os
 import pandas as pd
 import gdown
 from io import BytesIO
 from google.cloud import bigquery
 
-# Expandir la ruta de credenciales
 cred_path = os.path.expanduser(os.getenv("GOOGLE_APPLICATION_CREDENTIALS"))
 print(f"🔑 Usando credenciales: {cred_path}")
 
-# Cliente BigQuery
 client = bigquery.Client.from_service_account_json(cred_path)
 
-# Descargar CSV en memoria
 file_id = "1Tu1__f_w-s7V2UCyP5RFVNRMFtnJ0zfE"
 url_csv = f"https://drive.google.com/uc?id={file_id}"
 print("📥 Descargando CSV...")
 csv_bytes = gdown.download(url_csv, output=None, quiet=False)
 csv_buffer = BytesIO(csv_bytes)
 
-# Leer CSV
 df = pd.read_csv(csv_buffer, sep=",", on_bad_lines="skip", low_memory=False, encoding="utf-8-sig")
 df.columns = df.columns.str.strip().str.replace(" ", "_").str.replace(r"[^a-zA-Z0-9_]", "", regex=True)
 print(f"✅ CSV leído correctamente. Filas: {len(df)} | Columnas: {len(df.columns)}")
 
-# Subir a BigQuery
 proyecto_bq = "lookerstudio-consolidacion"
 dataset_bq = "DatosLooker_USC"
 tabla_bq = "Full"
