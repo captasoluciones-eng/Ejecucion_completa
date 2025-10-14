@@ -1,64 +1,53 @@
-name: Ejecutar CreditosActivos10
+name: Cargar CreditosActivos10 a BigQuery
 
 on:
-  workflow_dispatch:   # Permite ejecutarlo manualmente desde GitHub
-  schedule:
-    - cron: "0 * * * *"  # ⏰ Ejecutar cada hora (UTC)
+  workflow_dispatch:
 
 jobs:
-  run-creditosactivos10:
+  upload_to_bigquery:
     runs-on: ubuntu-latest
-
     steps:
-      # --------------------------------------------------
-      # 1️⃣ Descargar el repositorio
-      # --------------------------------------------------
-      - name: 📥 Checkout repository
+
+      # 1️⃣ Clonar el repositorio
+      - name: Checkout repo
         uses: actions/checkout@v3
 
-      # --------------------------------------------------
       # 2️⃣ Configurar Python
-      # --------------------------------------------------
-      - name: 🐍 Setup Python
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
-          python-version: "3.12"
+          python-version: '3.12'
 
-      # --------------------------------------------------
-      # 3️⃣ Actualizar pip e instalar dependencias
-      # --------------------------------------------------
-      - name: 📦 Instalar dependencias necesarias
+      # 3️⃣ Instalar dependencias
+      - name: Instalar librerías
         run: |
           python -m pip install --upgrade pip
-          pip install pandas gdown google-cloud-bigquery pyarrow
+          pip install pandas gdown google-cloud-bigquery
 
-      # --------------------------------------------------
-      # 4️⃣ Cargar credenciales de Google Cloud desde secretos
-      # --------------------------------------------------
-      - name: 🔑 Cargar credenciales GCP
+      # 4️⃣ Guardar credenciales de GCP desde secretos
+      - name: Guardar credenciales GCP
         run: |
-          echo '${{ secrets.GCP_CREDENTIALS }}' > $HOME/gcp_credentials.json
+          echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_credentials.json
           echo "✅ Credenciales guardadas en $HOME/gcp_credentials.json"
-          ls -l $HOME/gcp_credentials.json
 
-      # --------------------------------------------------
-      # 5️⃣ Ejecutar el script principal en memoria
-      # --------------------------------------------------
-      - name: 🚀 Ejecutar CreditosActivos10 en memoria
+      # 5️⃣ Ejecutar script en memoria sin guardar CSV
+      - name: Ejecutar CreditosActivos10
         env:
           GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
         run: |
-          python3 << EOF
+          python3 << 'EOF'
           import os
           import pandas as pd
           import gdown
           from io import BytesIO
           from google.cloud import bigquery
 
-          print(f"🔑 Autenticando con credenciales: {os.getenv('GOOGLE_APPLICATION_CREDENTIALS')}")
+          print(f"🔑 Usando credenciales: {os.getenv('GOOGLE_APPLICATION_CREDENTIALS')}")
+
+          # Cliente BigQuery
           client = bigquery.Client()
 
-          # Descargar CSV en memoria
+          # Descargar CSV directamente en memoria
           file_id = "1Tu1__f_w-s7V2UCyP5RFVNRMFtnJ0zfE"
           url_csv = f"https://drive.google.com/uc?id={file_id}"
           print("📥 Descargando CSV...")
@@ -70,20 +59,16 @@ jobs:
           df.columns = df.columns.str.strip().str.replace(" ", "_").str.replace(r"[^a-zA-Z0-9_]", "", regex=True)
           print(f"✅ CSV leído correctamente. Filas: {len(df)} | Columnas: {len(df.columns)}")
 
-          # Subir a BigQuery
+          # Configuración BigQuery
           proyecto_bq = "lookerstudio-consolidacion"
           dataset_bq = "DatosLooker_USC"
           tabla_bq = "Full"
           tabla_destino = f"{proyecto_bq}.{dataset_bq}.{tabla_bq}"
 
           job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE", autodetect=True)
+
+          # Subir a BigQuery
           job = client.load_table_from_dataframe(df, tabla_destino, job_config=job_config)
           job.result()
           print(f"✅ Datos subidos correctamente a {tabla_destino}")
           EOF
-
-      # --------------------------------------------------
-      # 6️⃣ Confirmación final
-      # --------------------------------------------------
-      - name: ✅ Confirmar finalización
-        run: echo "🎉 Script CreditosActivos10 finalizado correctamente"
