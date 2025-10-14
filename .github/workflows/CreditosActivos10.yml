@@ -55,7 +55,7 @@ jobs:
       # --------------------------------------------------
       - name: 🚀 Ejecutar CreditosActivos10.py
         env:
-          GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
+          GOOGLE_APPLICATION_CREDENTIALS: /home/runner/gcp_credentials.json
         run: python3 "CreditosActivos10.py"
 
       # --------------------------------------------------
