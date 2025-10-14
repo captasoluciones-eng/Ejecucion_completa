@@ -8,17 +8,17 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout repo
-      uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v3
 
-    - name: Guardar credenciales GCP
-      run: echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_credentials.json
+      - name: Guardar credenciales GCP
+        run: echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_credentials.json
 
-    - name: Ejecutar CreditosActivos10
-      env:
-        GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
-      run: |
-        python3 << 'EOF'
+      - name: Ejecutar CreditosActivos10
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
+        run: |
+          python3 << 'EOF'
 import os
 import pandas as pd
 import gdown
