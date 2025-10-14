@@ -1,9 +1,9 @@
 name: Ejecutar CreditosActivos10
 
 on:
-  workflow_dispatch:   # Ejecutarlo manualmente
+  workflow_dispatch:   # Permite ejecutarlo manualmente desde GitHub
   schedule:
-    - cron: "0 * * * *"  # Cada hora (UTC)
+    - cron: "0 * * * *"  # ⏰ Ejecutar cada hora (UTC)
 
 jobs:
   run-creditosactivos10:
@@ -25,7 +25,7 @@ jobs:
           python-version: "3.12"
 
       # --------------------------------------------------
-      # 3️⃣ Instalar dependencias
+      # 3️⃣ Actualizar pip e instalar dependencias
       # --------------------------------------------------
       - name: 📦 Instalar dependencias necesarias
         run: |
@@ -33,54 +33,54 @@ jobs:
           pip install pandas gdown google-cloud-bigquery pyarrow
 
       # --------------------------------------------------
-      # 4️⃣ Configurar credenciales de Google Cloud
+      # 4️⃣ Cargar credenciales de Google Cloud desde secretos
       # --------------------------------------------------
-      - name: 🔑 Configurar credenciales GCP
+      - name: 🔑 Cargar credenciales GCP
         run: |
-          echo "${{ secrets.GCP_CREDENTIALS }}" > $HOME/gcp_credentials.json
+          echo '${{ secrets.GCP_CREDENTIALS }}' > $HOME/gcp_credentials.json
+          echo "✅ Credenciales guardadas en $HOME/gcp_credentials.json"
+          ls -l $HOME/gcp_credentials.json
+
+      # --------------------------------------------------
+      # 5️⃣ Ejecutar el script principal en memoria
+      # --------------------------------------------------
+      - name: 🚀 Ejecutar CreditosActivos10 en memoria
         env:
-          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+          GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
+        run: |
+          python3 << EOF
+          import os
+          import pandas as pd
+          import gdown
+          from io import BytesIO
+          from google.cloud import bigquery
 
-      # --------------------------------------------------
-      # 5️⃣ Ejecutar script directamente en memoria
-      # --------------------------------------------------
-      - name: 🚀 Ejecutar CreditosActivos10.py (memoria)
-  env:
-    GOOGLE_APPLICATION_CREDENTIALS: $HOME/gcp_credentials.json
-  run: |
-    python3 << EOF
-    import os
-    import pandas as pd
-    import gdown
-    from io import BytesIO
-    from google.cloud import bigquery
+          print(f"🔑 Autenticando con credenciales: {os.getenv('GOOGLE_APPLICATION_CREDENTIALS')}")
+          client = bigquery.Client()
 
-    print(f"🔑 Autenticando con credenciales: {os.getenv('GOOGLE_APPLICATION_CREDENTIALS')}")
-    client = bigquery.Client()
+          # Descargar CSV en memoria
+          file_id = "1Tu1__f_w-s7V2UCyP5RFVNRMFtnJ0zfE"
+          url_csv = f"https://drive.google.com/uc?id={file_id}"
+          print("📥 Descargando CSV...")
+          csv_bytes = gdown.download(url_csv, output=None, quiet=False)
+          csv_buffer = BytesIO(csv_bytes)
 
-    # Descargar CSV en memoria
-    file_id = "1Tu1__f_w-s7V2UCyP5RFVNRMFtnJ0zfE"
-    url_csv = f"https://drive.google.com/uc?id={file_id}"
-    print("📥 Descargando CSV...")
-    csv_bytes = gdown.download(url_csv, output=None, quiet=False)
-    csv_buffer = BytesIO(csv_bytes)
+          # Leer CSV
+          df = pd.read_csv(csv_buffer, sep=",", on_bad_lines="skip", low_memory=False, encoding="utf-8-sig")
+          df.columns = df.columns.str.strip().str.replace(" ", "_").str.replace(r"[^a-zA-Z0-9_]", "", regex=True)
+          print(f"✅ CSV leído correctamente. Filas: {len(df)} | Columnas: {len(df.columns)}")
 
-    # Leer CSV
-    df = pd.read_csv(csv_buffer, sep=",", on_bad_lines="skip", low_memory=False, encoding="utf-8-sig")
-    df.columns = df.columns.str.strip().str.replace(" ", "_").str.replace(r"[^a-zA-Z0-9_]", "", regex=True)
-    print(f"✅ CSV leído correctamente. Filas: {len(df)} | Columnas: {len(df.columns)}")
+          # Subir a BigQuery
+          proyecto_bq = "lookerstudio-consolidacion"
+          dataset_bq = "DatosLooker_USC"
+          tabla_bq = "Full"
+          tabla_destino = f"{proyecto_bq}.{dataset_bq}.{tabla_bq}"
 
-    # Subir a BigQuery
-    proyecto_bq = "lookerstudio-consolidacion"
-    dataset_bq = "DatosLooker_USC"
-    tabla_bq = "Full"
-    tabla_destino = f"{proyecto_bq}.{dataset_bq}.{tabla_bq}"
-
-    job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE", autodetect=True)
-    job = client.load_table_from_dataframe(df, tabla_destino, job_config=job_config)
-    job.result()
-    print(f"✅ Datos subidos correctamente a {tabla_destino}")
-    EOF
+          job_config = bigquery.LoadJobConfig(write_disposition="WRITE_TRUNCATE", autodetect=True)
+          job = client.load_table_from_dataframe(df, tabla_destino, job_config=job_config)
+          job.result()
+          print(f"✅ Datos subidos correctamente a {tabla_destino}")
+          EOF
 
       # --------------------------------------------------
       # 6️⃣ Confirmación final
