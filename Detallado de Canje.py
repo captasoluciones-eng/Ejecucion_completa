@@ -1,1 +1,106 @@
-{"nbformat":4,"nbformat_minor":0,"metadata":{"colab":{"provenance":[],"authorship_tag":"ABX9TyMWM25pLMbTP2Ic9BzCq+W9"},"kernelspec":{"name":"python3","display_name":"Python 3"},"language_info":{"name":"python"}},"cells":[{"cell_type":"code","execution_count":1,"metadata":{"colab":{"base_uri":"https://localhost:8080/"},"id":"5kFFvGbxCN7L","executionInfo":{"status":"ok","timestamp":1758823479916,"user_tz":420,"elapsed":24376,"user":{"displayName":"CAPTA SOLUCIONES","userId":"17177378079453460348"}},"outputId":"789905ee-23d9-4de1-e72e-e76ffc7b57cc"},"outputs":[{"output_type":"stream","name":"stdout","text":["🔹 Iniciando proyecto: Carga Detallado de canje a BigQuery\n","Descargando CSV...\n"]},{"output_type":"stream","name":"stderr","text":["Downloading...\n","From: https://drive.google.com/uc?id=1RMOvX2uvcTKhH4_0H7FSCM-P9t3PJ8GD\n","To: /content/DetalladodeCanje.csv\n","100%|██████████| 47.3M/47.3M [00:00<00:00, 210MB/s]\n"]},{"output_type":"stream","name":"stdout","text":["Leyendo CSV...\n","CSV leído correctamente. Filas: 189378  Columnas: 19\n","Subiendo datos a BigQuery...\n","Datos subidos correctamente a lookerstudio-consolidacion.DatosLooker_USC.DetalladoDeCanje\n"]}],"source":["from google.colab import auth\n","auth.authenticate_user()\n","\n","import pandas as pd\n","import gdown\n","from google.cloud import bigquery\n","\n","\n","\n","print(\"🔹 Iniciando proyecto: Carga Detallado de canje a BigQuery\")\n","\n","# -----------------------------\n","# Configuración\n","# -----------------------------\n","# ID de archivo de Google Drive\n","file_id = \"1RMOvX2uvcTKhH4_0H7FSCM-P9t3PJ8GD\"\n","url_csv = f\"https://drive.google.com/uc?id={file_id}\"\n","archivo_csv = \"DetalladodeCanje.csv\"\n","\n","proyecto_bq = \"lookerstudio-consolidacion\"\n","dataset_bq = \"DatosLooker_USC\"\n","tabla_bq = \"DetalladoDeCanje\"\n","\n","# -----------------------------\n","# 1. Descargar CSV\n","# -----------------------------\n","print(\"Descargando CSV...\")\n","gdown.download(url_csv, archivo_csv, quiet=False)\n","\n","# -----------------------------\n","# 2. Leer CSV (forzando separador)\n","# -----------------------------\n","print(\"Leyendo CSV...\")\n","try:\n","    df = pd.read_csv(archivo_csv, sep=\",\", on_bad_lines='skip', low_memory=False, encoding='utf-8-sig')\n","    print(f\"CSV leído correctamente. Filas: {len(df)}  Columnas: {len(df.columns)}\")\n","except Exception as e:\n","    print(\"Error al leer el CSV:\", e)\n","    exit()\n","\n","# -----------------------------\n","# 3. Limpiar nombres de columnas para BigQuery\n","# -----------------------------\n","df.columns = (\n","    df.columns\n","    .str.strip()                           # quitar espacios\n","    .str.replace(\" \", \"_\")                 # espacios por guiones bajos\n","    .str.replace(r\"[^a-zA-Z0-9_]\", \"\", regex=True)  # quitar caracteres no válidos\n",")\n","\n","# -----------------------------\n","# 4. Subir a BigQuery\n","# -----------------------------\n","print(\"Subiendo datos a BigQuery...\")\n","client = bigquery.Client(project=proyecto_bq)\n","\n","tabla_destino = f\"{proyecto_bq}.{dataset_bq}.{tabla_bq}\"\n","\n","job_config = bigquery.LoadJobConfig(\n","    write_disposition=\"WRITE_TRUNCATE\",\n","    autodetect=True\n",")\n","\n","try:\n","    job = client.load_table_from_dataframe(df, tabla_destino, job_config=job_config)\n","    job.result()\n","    print(f\"Datos subidos correctamente a {tabla_destino}\")\n","except Exception as e:\n","    print(\"Error al subir a BigQuery:\", e)\n"]}]}
+import pandas as pd
+import gdown
+from google.cloud import bigquery
+import os
+
+# -----------------------------
+# Configuración de credenciales (MULTI-ENTORNO)
+# -----------------------------
+def configurar_credenciales():
+    """Detecta el entorno y configura las credenciales apropiadas"""
+    
+    # 1. GitHub Actions (busca credenciales en el home del usuario)
+    github_creds = os.path.expanduser("~/gcp_credentials.json")
+    if os.path.exists(github_creds):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = github_creds
+        print("✅ Usando credenciales de GitHub Actions")
+        return
+    
+    # 2. PC Local (Windows)
+    local_creds = r"C:\PyScripts\lookerstudio-consolidacion-c10dd284ce9d.json"
+    if os.path.exists(local_creds):
+        os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = local_creds
+        print("✅ Usando credenciales locales")
+        return
+    
+    # 3. Google Colab (usa autenticación nativa)
+    try:
+        from google.colab import auth
+        auth.authenticate_user()
+        print("✅ Usando autenticación de Google Colab")
+        return
+    except ImportError:
+        pass
+    
+    # Si no encontró ninguna credencial
+    print("❌ No se encontraron credenciales de GCP")
+    raise EnvironmentError("No se pudo configurar la autenticación con Google Cloud")
+
+# Configurar credenciales según el entorno
+configurar_credenciales()
+
+# -----------------------------
+# Configuración de parámetros
+# -----------------------------
+file_id = "1RMOvX2uvcTKhH4_0H7FSCM-P9t3PJ8GD"
+url_csv = f"https://drive.google.com/uc?id={file_id}"
+archivo_csv = "DetalladoCanje.csv"
+
+proyecto_bq = "lookerstudio-consolidacion"
+dataset_bq = "DatosLooker_USC_V2"
+tabla_bq = "DetalladoDeCanje"
+
+# -----------------------------
+# 1. Descargar CSV
+# -----------------------------
+print("📥 Descargando CSV...")
+try:
+    gdown.download(url_csv, archivo_csv, quiet=False)
+    print(f"✅ Archivo descargado: {archivo_csv}")
+except Exception as e:
+    print(f"❌ Error al descargar el archivo: {e}")
+    exit(1)
+
+# -----------------------------
+# 2. Leer CSV
+# -----------------------------
+print("📖 Leyendo CSV...")
+try:
+    df = pd.read_csv(archivo_csv, sep=",", on_bad_lines='skip', low_memory=False, encoding='utf-8-sig')
+    print(f"✅ CSV leído correctamente. Filas: {len(df)} | Columnas: {len(df.columns)}")
+except Exception as e:
+    print(f"❌ Error al leer el CSV: {e}")
+    exit(1)
+
+# -----------------------------
+# 3. Limpiar nombres de columnas
+# -----------------------------
+df.columns = (
+    df.columns
+    .str.strip()
+    .str.replace(" ", "_")
+    .str.replace(r"[^a-zA-Z0-9_]", "", regex=True)
+)
+print("🧹 Nombres de columnas limpiados")
+
+# -----------------------------
+# 4. Subir a BigQuery
+# -----------------------------
+print("🚀 Subiendo datos a BigQuery...")
+client = bigquery.Client(project=proyecto_bq)
+tabla_destino = f"{proyecto_bq}.{dataset_bq}.{tabla_bq}"
+
+job_config = bigquery.LoadJobConfig(
+    write_disposition="WRITE_TRUNCATE",
+    autodetect=True
+)
+
+try:
+    job = client.load_table_from_dataframe(df, tabla_destino, job_config=job_config)
+    job.result()
+    print(f"✅ Datos subidos correctamente a {tabla_destino}")
+except Exception as e:
+    print(f"❌ Error al subir a BigQuery: {e}")
+    exit(1)
+
+print("🎉 Proceso completado exitosamente")
