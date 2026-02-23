@@ -23,8 +23,10 @@ jobs:
           pip install pandas numpy scipy gdown google-cloud-bigquery
 
       - name: Configurar credenciales GCP
+        env:
+          GCP_CREDS: ${{ secrets.GCP_CREDENTIALS_JSON }}
         run: |
-          echo '${{ secrets.GCP_CREDENTIALS_JSON }}' > ~/gcp_credentials.json
+          echo "$GCP_CREDS" > ~/gcp_credentials.jsonF
 
       - name: Ejecutar Analisis de quitas y convenios
         run: |
