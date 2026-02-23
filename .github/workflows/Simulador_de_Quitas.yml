@@ -26,9 +26,9 @@ jobs:
         env:
           GCP_CREDS: ${{ secrets.GCP_CREDENTIALS }}
         run: |
-          echo "$GCP_CREDS" > ~/gcp_credentials.json
-          echo "Tamaño del archivo: $(wc -c < ~/gcp_credentials.json) bytes"
-          echo "Primeros 50 chars: $(head -c 50 ~/gcp_credentials.json)"
+          echo "$GCP_CREDS" > ~/gcp_credentials
+          echo "Tamaño del archivo: $(wc -c < ~/gcp_credentials) bytes"
+          echo "Primeros 50 chars: $(head -c 50 ~/gcp_credentials)"
 
       - name: Ejecutar Analisis de quitas y convenios
         run: |
