@@ -24,11 +24,10 @@ jobs:
 
       - name: Configurar credenciales GCP
         env:
-          GCP_CREDS: ${{ secrets.GCP_CREDENTIALS }}
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
         run: |
-          echo "$GCP_CREDS" > ~/gcp_credentials.json
-          echo "Tamaño del archivo: $(wc -c < ~/gcp_credentials) bytes"
-          echo "Primeros 50 chars: $(head -c 50 ~/gcp_credentials)"
+          echo "$GCP_CREDENTIALS" > $HOME/gcp_credentials.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcp_credentials.json" >> $GITHUB_ENV
 
       - name: Ejecutar Analisis de quitas y convenios
         run: |
