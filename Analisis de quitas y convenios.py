@@ -17,9 +17,12 @@ warnings.filterwarnings('ignore')
 # ----------------------------
 #os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\PyScripts\lookerstudio-consolidacion-c10dd284ce9d.json"
 def configurar_credenciales():
-    """Detecta el entorno y configura las credenciales apropiadas"""
-    
-    # 1. GitHub Actions (busca credenciales en el home del usuario)
+    # 0. Variable de entorno ya configurada (GitHub Actions via GITHUB_ENV)
+    if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        print("✅ Usando credenciales de variable de entorno")
+        return
+
+    # 1. GitHub Actions (archivo directo)
     github_creds = os.path.expanduser("~/gcp_credentials.json")
     if os.path.exists(github_creds):
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = github_creds
@@ -325,5 +328,6 @@ def subir_a_bq(df, tabla):
     print(f"🎉 Datos subidos a {tabla}")
 
 subir_a_bq(df_long, TABLA_CONSOLIDADO)
+
 
 print("\n✅ Proceso completado exitosamente")
