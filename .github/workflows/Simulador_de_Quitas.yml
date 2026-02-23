@@ -29,6 +29,12 @@ jobs:
           echo "$GCP_CREDENTIALS" > $HOME/gcp_credentials.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcp_credentials.json" >> $GITHUB_ENV
 
+          - name: Verificar credenciales
+          run: |
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$GOOGLE_APPLICATION_CREDENTIALS"
+          ls -la $HOME/gcp_credentials.json
+          wc -c $HOME/gcp_credentials.json
+
       - name: Ejecutar Analisis de quitas y convenios
         run: |
           python "Analisis de quitas y convenios.py"
