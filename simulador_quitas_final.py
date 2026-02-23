@@ -328,6 +328,8 @@ def generar_escenarios(df):
 
 print("🎯 Generando escenarios de quitas...")
 df_escenarios = generar_escenarios(df_long)
+if "DebajoDel100" not in df_escenarios.columns:
+    df_escenarios["DebajoDel100"] = np.nan
 
 # ----------------------------
 # Funciones robustas para buscar la quita
@@ -449,7 +451,8 @@ def simular_grupo(grupo):
     grupo = grupo.copy()
     codigo = first_value_safe(grupo, "Codigo")
     
-    tir_obj = parse_debajo(grupo["DebajoDel100"].iloc[0])
+    tir_obj = parse_debajo(grupo["DebajoDel100"].iloc[0] if "DebajoDel100" in grupo.columns else np.nan)
+
     
     if tir_obj is None:
         # Sin escenario de quita, solo calcular TIR
@@ -607,4 +610,5 @@ except Exception as e:
 
 
 print("\n🎉 Proceso completado exitosamente")
+
 
