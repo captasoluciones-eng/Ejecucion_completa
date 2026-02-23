@@ -41,4 +41,4 @@ jobs:
 
       - name: Ejecutar simulador_quitas_resumen
         run: |
-          python simulador_quitas_resumen.py
+          python simulador_quitas_final.py
