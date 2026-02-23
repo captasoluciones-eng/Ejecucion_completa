@@ -17,26 +17,26 @@ warnings.filterwarnings('ignore')
 # ----------------------------
 #os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\PyScripts\lookerstudio-consolidacion-c10dd284ce9d.json"
 def configurar_credenciales():
-    # 0. Variable de entorno ya configurada (GitHub Actions via GITHUB_ENV)
+    # 0. Variable de entorno ya seteada externamente
     if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
         print("✅ Usando credenciales de variable de entorno")
         return
 
-    # 1. GitHub Actions (archivo directo)
+    # 1. GitHub Actions
     github_creds = os.path.expanduser("~/gcp_credentials.json")
     if os.path.exists(github_creds):
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = github_creds
         print("✅ Usando credenciales de GitHub Actions")
         return
-    
+
     # 2. PC Local (Windows)
     local_creds = r"C:\PyScripts\lookerstudio-consolidacion-c10dd284ce9d.json"
     if os.path.exists(local_creds):
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = local_creds
         print("✅ Usando credenciales locales")
         return
-    
-    # 3. Google Colab (usa autenticación nativa)
+
+    # 3. Google Colab
     try:
         from google.colab import auth
         auth.authenticate_user()
@@ -44,8 +44,7 @@ def configurar_credenciales():
         return
     except ImportError:
         pass
-    
-    # Si no encontró ninguna credencial
+
     print("❌ No se encontraron credenciales de GCP")
     raise EnvironmentError("No se pudo configurar la autenticación con Google Cloud")
 
@@ -331,3 +330,4 @@ subir_a_bq(df_long, TABLA_CONSOLIDADO)
 
 
 print("\n✅ Proceso completado exitosamente")
+
