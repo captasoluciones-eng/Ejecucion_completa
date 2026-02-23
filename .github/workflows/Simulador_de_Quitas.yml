@@ -2,39 +2,34 @@ name: Simulador de Quitas - Semanal
 
 on:
   schedule:
-    - cron: '0 8 * * 0'  # Todos los domingos a las 8:00 AM UTC
-  workflow_dispatch:      # Permite ejecución manual desde GitHub
+    - cron: '0 8 * * 0'
+  workflow_dispatch:
 
 jobs:
   ejecutar-simulador:
     runs-on: ubuntu-latest
 
     steps:
-      # 1. Clonar el repositorio
       - name: Checkout del repositorio
         uses: actions/checkout@v4
 
-      # 2. Configurar Python
       - name: Configurar Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
 
-      # 3. Instalar dependencias
       - name: Instalar dependencias
         run: |
           pip install pandas numpy scipy gdown google-cloud-bigquery
 
-      # 4. Escribir credenciales GCP desde el Secret
       - name: Configurar credenciales GCP
         run: |
           echo '${{ secrets.GCP_CREDENTIALS_JSON }}' > ~/gcp_credentials.json
 
-      # 5. Ejecutar el script
-      
-       - name: Ejecutar Analisis de quitas y convenios.py
+      - name: Ejecutar Analisis de quitas y convenios
         run: |
           python "Analisis de quitas y convenios.py"
-       - name: Ejecutar simulador_quitas_resumen.py
+
+      - name: Ejecutar simulador_quitas_resumen
         run: |
           python simulador_quitas_resumen.py
