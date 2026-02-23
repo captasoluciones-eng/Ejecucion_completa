@@ -24,7 +24,7 @@ jobs:
 
       - name: Configurar credenciales GCP
         env:
-          GCP_CREDS: ${{ secrets.GCP_CREDENTIALS_JSON }}
+          GCP_CREDS: ${{ secrets.GCP_CREDENTIALS }}
         run: |
           echo "$GCP_CREDS" > ~/gcp_credentials.json
           echo "Tamaño del archivo: $(wc -c < ~/gcp_credentials.json) bytes"
