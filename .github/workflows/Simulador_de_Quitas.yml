@@ -36,9 +36,13 @@ jobs:
           wc -c $HOME/gcp_credentials.json
 
       - name: Ejecutar Analisis de quitas y convenios
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.home }}/gcp_credentials.json
         run: |
           python "Analisis de quitas y convenios.py"
 
       - name: Ejecutar simulador_quitas_resumen
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.home }}/gcp_credentials.json
         run: |
           python simulador_quitas_resumen.py
