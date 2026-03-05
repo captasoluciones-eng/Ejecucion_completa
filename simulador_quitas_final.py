@@ -503,6 +503,13 @@ def simular_grupo(grupo):
 print("🔁 Ejecutando simulación de quitas...")
 df_simulado = df_escenarios.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(simular_grupo).reset_index(drop=True)
 
+# ✅ Fix: asegurar que Codigo esté como columna, no como índice
+if "Codigo" not in df_simulado.columns:
+    df_simulado = df_simulado.reset_index()
+
+print("⚙️ Ajustando quitas según límites...")
+df_simulado = df_simulado.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(calcular_quita_ajustada).reset_index(drop=True)
+
 # ----------------------------
 # Ajustar quita según escenarios y recalcular TIR
 # ----------------------------
@@ -610,5 +617,6 @@ except Exception as e:
 
 
 print("\n🎉 Proceso completado exitosamente")
+
 
 
