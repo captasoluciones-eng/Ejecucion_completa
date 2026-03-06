@@ -458,6 +458,7 @@ def simular_grupo(grupo):
         # Sin escenario de quita, solo calcular TIR
         grupo["TIR_Simulada"] = calcular_xirr(grupo)
         grupo["QuitaSimulada"] = np.nan
+        grupo = grupo.reset_index(drop=True)
         return grupo
     
     if codigo in ["60272", "80379"]:
@@ -497,7 +498,7 @@ def simular_grupo(grupo):
     
     if codigo in ["60272", "80379"]:
         print(f"  TIR Simulada: {grupo['TIR_Simulada'].iloc[0]*100:.2f}%")
-    
+    grupo = grupo.reset_index(drop=True)
     return grupo
 
 print("🔁 Ejecutando simulación de quitas...")
@@ -560,11 +561,26 @@ def calcular_quita_ajustada(grupo):
     else:
         # Sin ajuste, mantener TIR simulada
         grupo["TIR_Ajustada"] = grupo["TIR_Simulada"]
-
+    grupo = grupo.reset_index(drop=True)
     return grupo
 
 print("⚙️ Ajustando quitas según límites...")
-df_simulado = df_simulado.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(calcular_quita_ajustada).reset_index(drop=True)
+#df_simulado = df_simulado.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(calcular_quita_ajustada).reset_index(drop=True)
+
+df_simulado = df_simulado.reset_index(drop=True)
+
+# Restaurar Codigo/DebajoDel100 si están en índice multinivel
+for col in ["Codigo", "DebajoDel100"]:
+    if col not in df_simulado.columns:
+        if hasattr(df_simulado.index, 'names') and col in df_simulado.index.names:
+            df_simulado = df_simulado.reset_index(level=col)
+        else:
+            raise KeyError(f"Columna '{col}' no encontrada ni en columnas ni en índice")
+
+df_simulado = df_simulado.groupby(
+    ["Codigo","DebajoDel100"], 
+    group_keys=False
+).apply(calcular_quita_ajustada).reset_index(drop=True)
 
 # ----------------------------
 # Generar resumen
@@ -617,6 +633,7 @@ except Exception as e:
 
 
 print("\n🎉 Proceso completado exitosamente")
+
 
 
 
