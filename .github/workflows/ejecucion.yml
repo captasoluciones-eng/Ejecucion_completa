@@ -36,9 +36,7 @@ jobs:
       - name: 🚀 Ejecutar Rentabilidad.py
         run: python "Rentabilidad.py"
       
-      - name: 🚀 Ejecutar Detallado de Canje.py
-        run: python "Detallado de Canje.py"
-      
+           
       - name: 🚀 Ejecutar Kpis's.py
         run: python "Kpis's.py"
 
