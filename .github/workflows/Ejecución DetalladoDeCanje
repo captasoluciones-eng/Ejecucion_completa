@@ -1,0 +1,43 @@
+name: Ejecución Completa BigQuery
+
+on:
+  workflow_dispatch:  # Ejecución manual desde GitHub
+  schedule:
+    - cron: "0 11 * * *"  # 4:00 AM hora de México (Sinaloa)
+
+jobs:
+  run-scripts:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout repository
+        uses: actions/checkout@v3
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.10"
+      
+      - name: 📦 Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install pandas gdown google-cloud-bigquery db-dtypes pyarrow
+      
+      - name: 🔑 Setup GCP credentials
+        env:
+          GCP_CREDENTIALS: ${{ secrets.GCP_CREDENTIALS }}
+        run: |
+          echo "$GCP_CREDENTIALS" > $HOME/gcp_credentials.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$HOME/gcp_credentials.json" >> $GITHUB_ENV
+      
+      
+      - name: 🚀 Ejecutar Detallado de Canje.py
+        run: python "Detallado de Canje.py"
+
+      
+      - name: 🧹 Cleanup
+        if: always()
+        run: |
+          rm -f $HOME/gcp_credentials.json
+          rm -f *.csv
+          echo "✅ Proceso completado y archivos temporales eliminados"
