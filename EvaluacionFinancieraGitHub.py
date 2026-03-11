@@ -1,67 +1,59 @@
-import pandas as pd
-import gdown
 from google.cloud import bigquery
+from google.oauth2 import service_account
 import os
 
-# -----------------------------
-# Configuración
-# -----------------------------
-# ❌ QUITAR ESTA LÍNEA (ya la configura GitHub Actions):
-# os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\PyScripts\lookerstudio-consolidacion-c10dd284ce9d.json"
+def configurar_credenciales():
+    github_creds = os.path.expanduser("~/gcp_credentials.json")
+    if os.path.exists(github_creds):
+        print("✅ Usando credenciales de GitHub Actions")
+        return github_creds
+    local_creds = r"C:\PyScripts\lookerstudio-consolidacion-c10dd284ce9d.json"
+    if os.path.exists(local_creds):
+        print("✅ Usando credenciales locales")
+        return local_creds
+    raise EnvironmentError("❌ No se pudo configurar la autenticación con Google Cloud")
 
-# ID de archivo de Google Drive
+creds_path = configurar_credenciales()
+
 file_id = "1Ftr23C6irRdSzcDy4tSBjK32o2vUlfE2"
-url_csv = f"https://drive.google.com/uc?id={file_id}"
-
-archivo_csv = "EvaluacionFinancieraBitacora.csv"
-
+drive_uri = f"https://drive.google.com/open?id={file_id}"
 proyecto_bq = "lookerstudio-consolidacion"
 dataset_bq = "DatosLooker_USC_V2"
 tabla_bq = "EvaluacionFinancieraBitacora"
-
-# -----------------------------
-# 1. Descargar CSV
-# -----------------------------
-print("Descargando CSV...")
-gdown.download(url_csv, archivo_csv, quiet=False)
-
-# -----------------------------
-# 2. Leer CSV (forzando separador)
-# -----------------------------
-print("Leyendo CSV...")
-try:
-    df = pd.read_csv(archivo_csv, sep=",", on_bad_lines='skip', low_memory=False, encoding='utf-8-sig')
-    print(f"CSV leído correctamente. Filas: {len(df)}  Columnas: {len(df.columns)}")
-except Exception as e:
-    print("Error al leer el CSV:", e)
-    exit()
-
-# -----------------------------
-# 3. Limpiar nombres de columnas para BigQuery
-# -----------------------------
-df.columns = (
-    df.columns
-    .str.strip()                           # quitar espacios
-    .str.replace(" ", "_")                 # espacios por guiones bajos
-    .str.replace(r"[^a-zA-Z0-9_]", "", regex=True)  # quitar caracteres no válidos
-)
-
-# -----------------------------
-# 4. Subir a BigQuery
-# -----------------------------
-print("Subiendo datos a BigQuery...")
-client = bigquery.Client(project=proyecto_bq)
-
 tabla_destino = f"{proyecto_bq}.{dataset_bq}.{tabla_bq}"
 
-job_config = bigquery.LoadJobConfig(
-    write_disposition="WRITE_TRUNCATE",
-    autodetect=True
+credentials = service_account.Credentials.from_service_account_file(
+    creds_path,
+    scopes=[
+        "https://www.googleapis.com/auth/drive.readonly",
+        "https://www.googleapis.com/auth/bigquery",
+    ]
 )
+client = bigquery.Client(project=proyecto_bq, credentials=credentials)
 
+external_config = bigquery.ExternalConfig("CSV")
+external_config.source_uris = [drive_uri]
+external_config.autodetect = True
+external_config.options.skip_leading_rows = 1
+external_config.options.allow_quoted_newlines = True
+external_config.options.allow_jagged_rows = True
+external_config.options.quote_character = '"'
+
+print("🚀 Leyendo desde Drive y cargando en BigQuery...")
+job_config = bigquery.QueryJobConfig(
+    table_definitions={"tabla_drive": external_config},
+    destination=client.dataset(dataset_bq).table(tabla_bq),
+    write_disposition="WRITE_TRUNCATE",
+    create_disposition="CREATE_IF_NEEDED",
+)
 try:
-    job = client.load_table_from_dataframe(df, tabla_destino, job_config=job_config)
+    job = client.query("SELECT * FROM tabla_drive", job_config=job_config)
     job.result()
-    print(f"✅ Datos subidos correctamente a {tabla_destino}")
+    tabla_final = client.get_table(tabla_destino)
+    print(f"✅ Datos cargados en {tabla_destino}")
+    print(f"   Filas: {tabla_final.num_rows:,} | Columnas: {len(tabla_final.schema)}")
 except Exception as e:
-    print("❌ Error al subir a BigQuery:", e)
+    print(f"❌ Error: {e}")
+    exit(1)
+
+print("🎉 Proceso completado exitosamente")
