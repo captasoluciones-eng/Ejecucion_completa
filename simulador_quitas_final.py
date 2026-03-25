@@ -502,8 +502,8 @@ def simular_grupo(grupo):
     return grupo
 
 print("🔁 Ejecutando simulación de quitas...")
-df_simulado = df_escenarios.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(simular_grupo).reset_index(drop=True)
-
+df_simulado = df_escenarios.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(simular_grupo)
+df_simulado = df_simulado.reset_index(drop=True) if "Codigo" in df_simulado.columns else df_simulado.reset_index()
 # ✅ Fix: asegurar que Codigo esté como columna, no como índice
 if "Codigo" not in df_simulado.columns:
     df_simulado = df_simulado.reset_index()
