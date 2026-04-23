@@ -83,7 +83,8 @@ for key, fid in ARCHIVOS_DRIVE.items():
     try:
         # ✅ Descargar con fuzzy=False para evitar problemas
         print(f"  ⏳ Descargando {key}.csv...")
-        gdown.download(url, out, quiet=False, fuzzy=False)
+        gdown.download(url, out, quiet=False)
+
         
         # Verificar que se descargó correctamente
         if os.path.exists(out) and os.path.getsize(out) > 0:
