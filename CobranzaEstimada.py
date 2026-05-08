@@ -41,10 +41,10 @@ configurar_credenciales()
 # -----------------------------
 file_id = "17bWe9Fm07DU-2qTaUs5xvLPy23kXNlqu"
 url_csv = f"https://drive.google.com/uc?id={file_id}"
-archivo_csv = "NuevosKPIS.csv"
+archivo_csv = "CobranzaEstimada.csv"
 proyecto_bq = "lookerstudio-consolidacion"
 dataset_bq = "DatosLooker_USC_V2"
-tabla_bq = "NuevosKPIS"
+tabla_bq = "CobranzaEstimada"
 # -----------------------------
 # 1. Descargar CSV
 # -----------------------------
