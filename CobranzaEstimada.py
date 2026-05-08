@@ -39,7 +39,7 @@ configurar_credenciales()
 # -----------------------------
 # Configuración de parámetros
 # -----------------------------
-file_id = "17bWe9Fm07DU-2qTaUs5xvLPy23kXNlqu"
+file_id = "15qyRChqtP5mAbd5l2yjTp3cOnIrxjItP"
 url_csv = f"https://drive.google.com/uc?id={file_id}"
 archivo_csv = "Estimada.csv"
 proyecto_bq = "lookerstudio-consolidacion"
