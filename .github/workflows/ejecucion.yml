@@ -38,7 +38,7 @@ jobs:
       
            
       - name: 🚀 Ejecutar Kpis's.py
-        run: python "Kpis's.py"
+        run: python "NuevosKPIS.py"
 
       - name: 🚀 Ejecutar EvaluacionFinancieraBitacora.py
         run: python "EvaluacionFinancieraGitHub.py"
