@@ -1,28 +1,24 @@
 import pandas as pd
-import gdown
 from google.cloud import bigquery
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaIoBaseDownload
+from google.oauth2 import service_account
 import os
+
 # -----------------------------
 # Configuración de credenciales (MULTI-ENTORNO)
 # -----------------------------
 def configurar_credenciales():
-    """Detecta el entorno y configura las credenciales apropiadas"""
-
-    # 1. GitHub Actions (busca credenciales en el home del usuario)
     github_creds = os.path.expanduser("~/gcp_credentials.json")
     if os.path.exists(github_creds):
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = github_creds
         print("✅ Usando credenciales de GitHub Actions")
         return
-
-    # 2. PC Local (Windows)
     local_creds = r"C:\PyScripts\lookerstudio-consolidacion-c10dd284ce9d.json"
     if os.path.exists(local_creds):
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = local_creds
         print("✅ Usando credenciales locales")
         return
-
-    # 3. Google Colab (usa autenticación nativa)
     try:
         from google.colab import auth
         auth.authenticate_user()
@@ -30,17 +26,14 @@ def configurar_credenciales():
         return
     except ImportError:
         pass
-
-    # Si no encontró ninguna credencial
     print("❌ No se encontraron credenciales de GCP")
     raise EnvironmentError("No se pudo configurar la autenticación con Google Cloud")
-# Configurar credenciales según el entorno
+
 configurar_credenciales()
 # -----------------------------
 # Configuración de parámetros
 # -----------------------------
 file_id = "1W9UJOlZDhQTmK_vjjrx0eNfGEvqnMdM0"
-url_csv = f"https://drive.google.com/uc?id={file_id}"
 archivo_csv = "Rentabilidad_Agrupada.csv"
 proyecto_bq = "lookerstudio-consolidacion"
 dataset_bq = "DatosLooker_USC_V2"
@@ -48,13 +41,27 @@ tabla_bq = "Rentabilidad"
 # -----------------------------
 # 1. Descargar CSV
 # -----------------------------
-print("📥 Descargando CSV...")
-try:
-    gdown.download(url_csv, archivo_csv, quiet=False)
-    print(f"✅ Archivo descargado: {archivo_csv}")
-except Exception as e:
-    print(f"❌ Error al descargar el archivo: {e}")
-    exit(1)
+def descargar_drive(file_id, destino):
+    print("📥 Descargando CSV con API de Drive...")
+    try:
+        creds = service_account.Credentials.from_service_account_file(
+            os.environ["GOOGLE_APPLICATION_CREDENTIALS"],
+            scopes=["https://www.googleapis.com/auth/drive.readonly"]
+        )
+        service = build("drive", "v3", credentials=creds)
+        request = service.files().get_media(fileId=file_id)
+        with open(destino, "wb") as f:
+            downloader = MediaIoBaseDownload(f, request)
+            done = False
+            while not done:
+                status, done = downloader.next_chunk()
+                print(f"  ⬇️ Descargando... {int(status.progress() * 100)}%")
+        print(f"✅ Archivo descargado: {destino}")
+    except Exception as e:
+        print(f"❌ Error al descargar el archivo: {e}")
+        exit(1)
+
+descargar_drive(file_id, archivo_csv)
 # -----------------------------
 # 2. Leer CSV
 # -----------------------------
