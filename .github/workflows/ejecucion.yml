@@ -34,7 +34,9 @@ jobs:
       
       - name: 🚀 Ejecutar Rentabilidad.py
         run: python "Rentabilidad.py"
-      
+
+      - name: 🚀 Ejecutar ComportamientodeLineadeCredito.py
+        run: python "ComportamientodeLineadeCredito.py"
 
       - name: 🚀 Ejecutar EvaluacionFinancieraBitacora.py
         run: python "EvaluacionFinancieraGitHub.py"
