@@ -1,9 +1,8 @@
 name: Ejecución Completa BigQuery
-
 on:
-  workflow_dispatch:  # Ejecución manual desde GitHub
+  workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"  # Cada hora (ajusta según necesites)
+    - cron: "0 * * * *"
 
 jobs:
   run-scripts:
@@ -21,7 +20,7 @@ jobs:
       - name: 📦 Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pandas gdown google-cloud-bigquery db-dtypes pyarrow
+          pip install pandas google-cloud-bigquery db-dtypes pyarrow google-api-python-client google-auth
       
       - name: 🔑 Setup GCP credentials
         env:
@@ -36,7 +35,6 @@ jobs:
       - name: 🚀 Ejecutar Rentabilidad.py
         run: python "Rentabilidad.py"
       
-           
       - name: 🚀 Ejecutar Kpis's.py
         run: python "NuevosKPIS.py"
 
