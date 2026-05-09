@@ -35,8 +35,6 @@ jobs:
       - name: 🚀 Ejecutar Rentabilidad.py
         run: python "Rentabilidad.py"
       
-      - name: 🚀 Ejecutar Kpis's.py
-        run: python "NuevosKPIS.py"
 
       - name: 🚀 Ejecutar EvaluacionFinancieraBitacora.py
         run: python "EvaluacionFinancieraGitHub.py"
