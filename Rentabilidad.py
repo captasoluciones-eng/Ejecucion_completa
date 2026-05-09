@@ -30,6 +30,7 @@ def configurar_credenciales():
     raise EnvironmentError("No se pudo configurar la autenticación con Google Cloud")
 
 configurar_credenciales()
+
 # -----------------------------
 # Configuración de parámetros
 # -----------------------------
@@ -38,8 +39,9 @@ archivo_csv = "Rentabilidad_Agrupada.csv"
 proyecto_bq = "lookerstudio-consolidacion"
 dataset_bq = "DatosLooker_USC_V2"
 tabla_bq = "Rentabilidad"
+
 # -----------------------------
-# 1. Descargar CSV
+# 1. Descargar CSV con API de Drive
 # -----------------------------
 def descargar_drive(file_id, destino):
     print("📥 Descargando CSV con API de Drive...")
@@ -62,6 +64,7 @@ def descargar_drive(file_id, destino):
         exit(1)
 
 descargar_drive(file_id, archivo_csv)
+
 # -----------------------------
 # 2. Leer CSV
 # -----------------------------
@@ -72,6 +75,7 @@ try:
 except Exception as e:
     print(f"❌ Error al leer el CSV: {e}")
     exit(1)
+
 # -----------------------------
 # 3. Limpiar nombres de columnas
 # -----------------------------
@@ -82,6 +86,7 @@ df.columns = (
     .str.replace(r"[^a-zA-Z0-9_]", "", regex=True)
 )
 print("🧹 Nombres de columnas limpiados")
+
 # -----------------------------
 # 4. Subir a BigQuery
 # -----------------------------
@@ -99,4 +104,5 @@ try:
 except Exception as e:
     print(f"❌ Error al subir a BigQuery: {e}")
     exit(1)
+
 print("🎉 Proceso completado exitosamente")
