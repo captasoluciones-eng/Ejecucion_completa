@@ -31,7 +31,10 @@ jobs:
       
       - name: 🚀 Ejecutar CreditosActivos10.py
         run: python "CreditosActivos10.py"
-      
+
+      - name: 🚀 Ejecutar  Kpis's.py
+        run: python " Kpis's.py"
+           
       - name: 🚀 Ejecutar Rentabilidad.py
         run: python "Rentabilidad.py"
 
