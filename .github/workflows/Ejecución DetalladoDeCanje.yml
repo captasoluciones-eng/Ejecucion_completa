@@ -1,4 +1,4 @@
-name: Ejecución Completa BigQuery
+name: Ejecución Detallado Canje
 
 on:
   workflow_dispatch:  # Ejecución manual desde GitHub
