@@ -36,7 +36,8 @@ jobs:
       - name: 🚀 Ejecutar CobranzaVigente.py
         run: python "CobranzaVigente.py"
       
-          
+      - name: 🚀 Ejecutar KPI.py
+        run: python "Kpis's.py"
       
       - name: 🧹 Cleanup
         if: always()
