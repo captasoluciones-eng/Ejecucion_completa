@@ -41,6 +41,9 @@ jobs:
 
       - name: 🚀 Ejecutar EvaluacionFinancieraBitacora.py
         run: python "EvaluacionFinancieraGitHub.py"
+
+      - name: 🚀 Ejecutar KPI.py
+        run: python "Kpis's.py"
       
       - name: 🧹 Cleanup
         if: always()
