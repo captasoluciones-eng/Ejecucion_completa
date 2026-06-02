@@ -48,6 +48,9 @@ jobs:
       - name: 🚀 Reporte_Gastos.py
         run: python "Reporte_Gastos.py"
       
+      - name:  🚀Create Comportamiento_de_pago.py
+        run: python "Comportamiento_de_pago.py"
+        
       - name: 🧹 Cleanup
         if: always()
         run: |
