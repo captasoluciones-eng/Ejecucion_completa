@@ -1,4 +1,4 @@
-# simulador_quitas_resumen.py - VERSIÓN CORREGIDA
+﻿# simulador_quitas_resumen.py - VERSIÓN CORREGIDA
 # Genera Resumen_Simulado con lógica completa de quitas y TIR
 
 import os
@@ -501,42 +501,26 @@ def simular_grupo(grupo):
     grupo = grupo.reset_index(drop=True)
     return grupo
 
-print("🔁 Ejecutando simulación de quitas...")
-df_simulado = df_escenarios.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(simular_grupo)
-
-# Asegurar índice limpio y columnas accesibles
-df_simulado = df_simulado.reset_index(drop=True)
-for col in ["Codigo", "DebajoDel100"]:
-    if col not in df_simulado.columns:
-        if hasattr(df_simulado.index, 'names') and col in (df_simulado.index.names or []):
-            df_simulado = df_simulado.reset_index()
-            break
-
-print("⚙️ Ajustando quitas según límites...")
-df_simulado = df_simulado.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(calcular_quita_ajustada).reset_index(drop=True)
-
 # ----------------------------
 # Ajustar quita según escenarios y recalcular TIR
 # ----------------------------
 def calcular_quita_ajustada(grupo):
     """Ajusta la quita según límites del escenario y recalcula TIR"""
     grupo = grupo.copy()
-    
-    # ✅ Definir quita ajustada según escenario
+
     def regla(row):
         quita_sim = row["QuitaSimulada"]
         if pd.isna(quita_sim):
             return np.nan
-        
+
         cobranza = row["TotalCobranzaEstimada"]
         tape = row["TotalCapitalTape"]
-        
-        # Valores por defecto si son NaN
+
         if pd.isna(cobranza):
             cobranza = float('inf')
         if pd.isna(tape):
             tape = float('inf')
-        
+
         if row["DebajoDel100"] == 5:
             return min(quita_sim, cobranza, tape * 0.7)
         elif row["DebajoDel100"] == 50:
@@ -545,46 +529,38 @@ def calcular_quita_ajustada(grupo):
             return min(quita_sim, cobranza, tape * 0.5)
         else:
             return quita_sim
-    
+
     grupo["QuitaAjustada"] = grupo.apply(regla, axis=1)
 
-    # Aplicar QuitaAjustada y recalcular TIR
     mask = (grupo["TipoDato"] == "Diferencia") & (grupo["PeriodoYMD"] == MES_ACTUAL)
-    
+
     if mask.any() and not pd.isna(grupo["QuitaAjustada"].iloc[0]):
         grupo.loc[mask, "Monto"] = grupo.loc[mask, "QuitaAjustada"]
-        
-        # Recalcular TIR_Ajustada
         tir_ajustada = calcular_xirr(grupo)
-        
-        # Validar rango razonable
         if pd.notna(tir_ajustada) and 0.0 <= tir_ajustada <= 2.0:
             grupo["TIR_Ajustada"] = tir_ajustada
         else:
             grupo["TIR_Ajustada"] = grupo["TIR_Simulada"]
     else:
-        # Sin ajuste, mantener TIR simulada
         grupo["TIR_Ajustada"] = grupo["TIR_Simulada"]
     grupo = grupo.reset_index(drop=True)
     return grupo
 
+def _restaurar_columnas(df):
+    """Restaura Codigo/DebajoDel100 como columnas tras groupby().apply() en pandas 2.x"""
+    if "Codigo" not in df.columns:
+        df = df.reset_index()
+    else:
+        df = df.reset_index(drop=True)
+    return df.loc[:, ~df.columns.duplicated()]
+
+print("🔁 Ejecutando simulación de quitas...")
+df_simulado = df_escenarios.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(simular_grupo)
+df_simulado = _restaurar_columnas(df_simulado)
+
 print("⚙️ Ajustando quitas según límites...")
-#df_simulado = df_simulado.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(calcular_quita_ajustada).reset_index(drop=True)
-
-df_simulado = df_simulado.reset_index(drop=True)
-
-# Restaurar Codigo/DebajoDel100 si están en índice multinivel
-for col in ["Codigo", "DebajoDel100"]:
-    if col not in df_simulado.columns:
-        if hasattr(df_simulado.index, 'names') and col in df_simulado.index.names:
-            df_simulado = df_simulado.reset_index(level=col)
-        else:
-            raise KeyError(f"Columna '{col}' no encontrada ni en columnas ni en índice")
-
-df_simulado = df_simulado.groupby(
-    ["Codigo","DebajoDel100"], 
-    group_keys=False
-).apply(calcular_quita_ajustada).reset_index(drop=True)
+df_simulado = df_simulado.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(calcular_quita_ajustada)
+df_simulado = _restaurar_columnas(df_simulado)
 
 # ----------------------------
 # Generar resumen
@@ -637,6 +613,7 @@ except Exception as e:
 
 
 print("\n🎉 Proceso completado exitosamente")
+
 
 
 
