@@ -546,21 +546,17 @@ def calcular_quita_ajustada(grupo):
     grupo = grupo.reset_index(drop=True)
     return grupo
 
-def _restaurar_columnas(df):
-    """Restaura Codigo/DebajoDel100 como columnas tras groupby().apply() en pandas 2.x"""
-    if "Codigo" not in df.columns:
-        df = df.reset_index()
-    else:
-        df = df.reset_index(drop=True)
-    return df.loc[:, ~df.columns.duplicated()]
-
 print("🔁 Ejecutando simulación de quitas...")
-df_simulado = df_escenarios.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(simular_grupo)
-df_simulado = _restaurar_columnas(df_simulado)
+_grupos = []
+for _keys, _grupo in df_escenarios.groupby(["Codigo","DebajoDel100"], group_keys=False):
+    _grupos.append(simular_grupo(_grupo))
+df_simulado = pd.concat(_grupos, ignore_index=True)
 
 print("⚙️ Ajustando quitas según límites...")
-df_simulado = df_simulado.groupby(["Codigo","DebajoDel100"], group_keys=False).apply(calcular_quita_ajustada)
-df_simulado = _restaurar_columnas(df_simulado)
+_grupos = []
+for _keys, _grupo in df_simulado.groupby(["Codigo","DebajoDel100"], group_keys=False):
+    _grupos.append(calcular_quita_ajustada(_grupo))
+df_simulado = pd.concat(_grupos, ignore_index=True)
 
 # ----------------------------
 # Generar resumen
