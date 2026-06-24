@@ -1,4 +1,4 @@
-﻿# simulador_quitas_resumen.py - VERSIÓN CORREGIDA
+# simulador_quitas_resumen.py - VERSIÓN CORREGIDA
 # Genera Resumen_Simulado con lógica completa de quitas y TIR
 
 import os
@@ -8,6 +8,7 @@ import gdown
 from datetime import datetime
 from scipy.optimize import brentq, minimize_scalar
 from google.cloud import bigquery
+from tqdm import tqdm
 import warnings
 
 warnings.filterwarnings('ignore')
@@ -18,26 +19,22 @@ warnings.filterwarnings('ignore')
 #os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\PyScripts\lookerstudio-consolidacion-c10dd284ce9d.json"
 
 def configurar_credenciales():
-    # 0. Variable de entorno ya seteada externamente
     if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
         print("✅ Usando credenciales de variable de entorno")
         return
 
-    # 1. GitHub Actions
     github_creds = os.path.expanduser("~/gcp_credentials.json")
     if os.path.exists(github_creds):
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = github_creds
         print("✅ Usando credenciales de GitHub Actions")
         return
 
-    # 2. PC Local (Windows)
     local_creds = r"C:\PyScripts\lookerstudio-consolidacion-c10dd284ce9d.json"
     if os.path.exists(local_creds):
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = local_creds
         print("✅ Usando credenciales locales")
         return
 
-    # 3. Google Colab
     try:
         from google.colab import auth
         auth.authenticate_user()
@@ -45,12 +42,10 @@ def configurar_credenciales():
         return
     except ImportError:
         pass
-    
-    # Si no encontró ninguna credencial
+
     print("❌ No se encontraron credenciales de GCP")
     raise EnvironmentError("No se pudo configurar la autenticación con Google Cloud")
 
-# Configurar credenciales según el entorno
 configurar_credenciales()
 
 # ----------------------------
@@ -63,7 +58,6 @@ ARCHIVOS_DRIVE = {
 }
 ARCHIVOS_LOCAL = {k: f"{k}.csv" for k in ARCHIVOS_DRIVE}
 
-# MES_ACTUAL: primer día del mes actual
 MES_ACTUAL = pd.to_datetime(datetime.today().strftime("%Y-%m-01"))
 
 # ----------------------------
@@ -122,7 +116,6 @@ def first_value_safe(grupo, col):
     return None
 
 def parse_debajo(val):
-    """Convierte DebajoDel100 a decimal (5 -> 0.05, 100 -> 1.0)"""
     if pd.isna(val):
         return None
     try:
@@ -134,33 +127,24 @@ def parse_debajo(val):
 # Funciones TIR (XIRR) - Estilo Excel
 # ----------------------------
 def xnpv_excel(rate, values, dates):
-    """XNPV usando meses como periodo, similar a TIR.NO.PER de Excel"""
     t0 = dates[0]
     meses = [(d.year - t0.year) * 12 + (d.month - t0.month) for d in dates]
     return sum(v / (1 + rate) ** (m / 12.0) for v, m in zip(values, meses))
 
 def xirr_excel(values, dates):
-    """Calcula TIR estilo Excel: 0 si no hay al menos un flujo positivo y uno negativo"""
     if not (any(v > 0 for v in values) and any(v < 0 for v in values)):
         return 0.0
-
     f = lambda r: xnpv_excel(r, values, dates)
-
-    # Intentar encontrar raíz usando brentq
     try:
-        # Verificar cambio de signo
         f_low = f(-0.9999)
         f_high = f(10)
         if f_low * f_high < 0:
             return brentq(f, -0.9999, 10)
     except:
         pass
-
-    # Si no hay raíz, devolver 0
     return 0.0
 
 def calcular_xirr(grupo):
-    """Calcula la TIR de un grupo tipo Excel TIR.NO.PER"""
     diffs = grupo[grupo["TipoDato"] == "Diferencia"].copy()
     diffs["PeriodoYMD"] = pd.to_datetime(diffs["PeriodoYMD"], errors="coerce")
     diffs = diffs.dropna(subset=["PeriodoYMD", "Monto"])
@@ -169,10 +153,9 @@ def calcular_xirr(grupo):
     if len(diffs) < 2:
         return 0.0
 
-    # Ignorar ceros iniciales
     flujos = diffs["Monto"].astype(float).tolist()
     fechas = diffs["PeriodoYMD"].tolist()
-    
+
     for i, v in enumerate(flujos):
         if v != 0:
             flujos = flujos[i:]
@@ -182,32 +165,17 @@ def calcular_xirr(grupo):
     if len(flujos) < 2:
         return 0.0
 
-    # Validación: debe haber al menos un flujo positivo y uno negativo
     if not (any(v < 0 for v in flujos) and any(v > 0 for v in flujos)):
         return 0.0
 
-    # Debug para códigos específicos
     codigo = grupo["Codigo"].iloc[0] if "Codigo" in grupo.columns else "N/A"
-    if codigo in ["60272", "80379"]:
-        print(f"\n🔍 DEBUG Código {codigo}:")
-        print("Flujos y fechas usados para TIR:")
-        for v, d in zip(flujos, fechas):
-            print(f"  {d.date()} -> ${v:,.2f}")
-
-    # Calcular TIR
     try:
         tir = xirr_excel(flujos, fechas)
     except Exception as e:
         print(f"⚠️ Error calculando TIR para código {codigo}: {e}")
         tir = 0.0
 
-    # Limitar tir entre 0 y 200%
-    tir = max(0.0, min(2.0, tir))
-
-    if codigo in ["60272", "80379"]:
-        print(f"  TIR calculada: {tir:.4f} ({tir*100:.2f}%)")
-
-    return tir
+    return max(0.0, min(2.0, tir))
 
 # ----------------------------
 # Normalizaciones y agregaciones
@@ -220,7 +188,6 @@ for d in (df_abono, df_bloques, df_canje):
 df_abono["PeriodoYM"] = get_periodo_series(df_abono, ["Periodo","FechaRegistro"])
 df_canje["PeriodoYM"] = get_periodo_series(df_canje, ["Periodo","FechaInicioPago"])
 
-# Mapas
 mapeo_list = []
 for df_src in [df_canje, df_abono, df_bloques]:
     if "Codigo" in df_src.columns:
@@ -232,7 +199,6 @@ df_mapa = pd.concat(mapeo_list, ignore_index=True) if mapeo_list else pd.DataFra
 if not df_mapa.empty:
     df_mapa = df_mapa.drop_duplicates(subset=["Codigo"], keep="first").set_index("Codigo")
 
-# Agregaciones
 if "MontoPagado" not in df_abono.columns:
     df_abono["MontoPagado"] = 0
 ab_agg = df_abono.groupby(["Codigo","PeriodoYM"], as_index=False)["MontoPagado"].sum().rename(columns={"MontoPagado":"Abono_Sum"})
@@ -244,7 +210,6 @@ ca_agg = df_canje.groupby(["Codigo","PeriodoYM"], as_index=False)["TotalCapital"
 merged = pd.merge(ab_agg, ca_agg, on=["Codigo","PeriodoYM"], how="outer").fillna(0)
 merged["Diferencia"] = merged["Abono_Sum"] - merged["Canje_Sum"]
 
-# Tabla larga
 print("📊 Construyendo tabla larga...")
 rows = []
 for _, r in merged.iterrows():
@@ -255,7 +220,7 @@ for _, r in merged.iterrows():
 df_long = pd.DataFrame(rows)
 
 if not df_mapa.empty:
-    df_long["NombreCompleto"] = df_long["Codigo"].map(df_mapa["NombreCompleto"]) 
+    df_long["NombreCompleto"] = df_long["Codigo"].map(df_mapa["NombreCompleto"])
     df_long["Sucursal"] = df_long["Codigo"].map(df_mapa["Sucursal"])
 else:
     df_long["NombreCompleto"] = None
@@ -276,50 +241,35 @@ tir_por_codigo = df_long.groupby("Codigo", group_keys=False).apply(calcular_xirr
 df_long = df_long.merge(tir_por_codigo, on="Codigo", how="left")
 
 # ----------------------------
-# ✅ CORRECCIÓN: Generar escenarios DebajoDel100
+# Generar escenarios DebajoDel100
 # ----------------------------
 def generar_escenarios(df):
-    """
-    Genera escenarios de quitas según TIR:
-    - Si TIR ≤ 0 o NaN: genera 5, 50 y 100
-    - Si TIR > 0: aplica reglas y SIEMPRE genera escenario 100
-    """
     escenarios = []
-    
     for _, row in df.iterrows():
         tir = row["TIR"]
-        
-        # Convertir a número válido
         try:
             tir = float(tir)
         except:
             tir = np.nan
 
-        # Siempre agregar escenario base (sin quita)
         base = row.to_dict()
         base["DebajoDel100"] = np.nan
         escenarios.append(base)
 
-        # ✅ LÓGICA CORREGIDA
         if pd.isna(tir) or tir <= 0:
-            # Si TIR es NaN, 0 o negativa → generar los tres escenarios
             for quita in [5, 50, 100]:
                 r = row.to_dict()
                 r["DebajoDel100"] = quita
                 escenarios.append(r)
         else:
-            # Si TIR > 0, aplicar reglas
-            if tir <= 0.04:  # ≤ 4%
+            if tir <= 0.04:
                 r5 = row.to_dict()
                 r5["DebajoDel100"] = 5
                 escenarios.append(r5)
-            
-            if tir <= 0.49:  # ≤ 49%
+            if tir <= 0.49:
                 r50 = row.to_dict()
                 r50["DebajoDel100"] = 50
                 escenarios.append(r50)
-            
-            # ✅ SIEMPRE generar escenario 100
             r100 = row.to_dict()
             r100["DebajoDel100"] = 100
             escenarios.append(r100)
@@ -335,16 +285,11 @@ if "DebajoDel100" not in df_escenarios.columns:
 # Funciones robustas para buscar la quita
 # ----------------------------
 def objetivo_quita(monto_quita, grupo, tir_objetivo):
-    """Calcula la diferencia entre TIR resultante y TIR objetivo"""
     sim = grupo.copy()
-    
-    # Buscar si ya existe una fila del mes actual
     mask = (sim["PeriodoYMD"] == MES_ACTUAL) & (sim["TipoDato"] == "Diferencia")
-    
     if mask.any():
         sim.loc[mask, "Monto"] = monto_quita
     else:
-        # Agregar nueva fila para el mes actual
         new_row = {
             "Codigo": first_value_safe(grupo, "Codigo") or grupo["Codigo"].iloc[0],
             "NombreCompleto": first_value_safe(grupo, "NombreCompleto"),
@@ -359,64 +304,41 @@ def objetivo_quita(monto_quita, grupo, tir_objetivo):
             "DebajoDel100": grupo["DebajoDel100"].iloc[0] if "DebajoDel100" in grupo.columns else np.nan
         }
         sim = pd.concat([sim, pd.DataFrame([new_row])], ignore_index=True)
-    
     tir = calcular_xirr(sim)
-    
     if pd.isna(tir):
-        return 1e12  # Valor alto si no se puede calcular
-    
+        return 1e12
     return tir - tir_objetivo
 
 def buscar_quita_robusta(grupo, tir_objetivo):
-    """
-    Busca el monto de quita que logra la TIR objetivo
-    Usa múltiples estrategias para encontrar la solución
-    """
-    codigo = first_value_safe(grupo, "Codigo")
     tape = first_value_safe(grupo, "TotalCapitalTape")
-    
     try:
         tape = float(tape) if tape is not None else 100000.0
     except:
         tape = 100000.0
-    
-    # Estrategia 1: Búsqueda de raíz con brentq
+
     a = 0.0
-    b = max(tape * 2.0, 100000.0)  # Rango inicial más amplio
-    
+    b = max(tape * 2.0, 100000.0)
+
     try:
         fa = objetivo_quita(a, grupo, tir_objetivo)
         fb = objetivo_quita(b, grupo, tir_objetivo)
-        
-        # Si hay cambio de signo, usar brentq
         if not (np.isnan(fa) or np.isnan(fb) or np.isinf(fa) or np.isinf(fb)):
             if fa * fb < 0:
-                resultado = brentq(lambda x: objetivo_quita(x, grupo, tir_objetivo), a, b, maxiter=500)
-                if codigo in ["60272", "80379"]:
-                    print(f"  ✓ Quita encontrada (brentq): ${resultado:,.2f}")
-                return resultado
-    except Exception as e:
-        if codigo in ["60272", "80379"]:
-            print(f"  ⚠️ Brentq falló: {e}")
-    
-    # Estrategia 2: Expandir rango de búsqueda
+                return brentq(lambda x: objetivo_quita(x, grupo, tir_objetivo), a, b, maxiter=500)
+    except:
+        pass
+
     try:
         for multiplicador in [5, 10, 20, 50, 100]:
             b = tape * multiplicador
             fa = objetivo_quita(a, grupo, tir_objetivo)
             fb = objetivo_quita(b, grupo, tir_objetivo)
-            
             if not (np.isnan(fa) or np.isnan(fb) or np.isinf(fa) or np.isinf(fb)):
                 if fa * fb < 0:
-                    resultado = brentq(lambda x: objetivo_quita(x, grupo, tir_objetivo), a, b, maxiter=500)
-                    if codigo in ["60272", "80379"]:
-                        print(f"  ✓ Quita encontrada (expandido x{multiplicador}): ${resultado:,.2f}")
-                    return resultado
-    except Exception as e:
-        if codigo in ["60272", "80379"]:
-            print(f"  ⚠️ Búsqueda expandida falló: {e}")
-    
-    # Estrategia 3: Minimización escalar
+                    return brentq(lambda x: objetivo_quita(x, grupo, tir_objetivo), a, b, maxiter=500)
+    except:
+        pass
+
     try:
         upper = max(tape * 100.0, 500000.0)
         res = minimize_scalar(
@@ -425,58 +347,37 @@ def buscar_quita_robusta(grupo, tir_objetivo):
             method='bounded',
             options={'maxiter': 500, 'xatol': 1.0}
         )
-        
         if res.success:
-            # Verificar que la solución sea razonable
             tir_resultante = calcular_xirr(grupo) + objetivo_quita(res.x, grupo, tir_objetivo)
-            if abs(tir_resultante - tir_objetivo) < 0.05:  # Tolerancia de 5%
-                if codigo in ["60272", "80379"]:
-                    print(f"  ✓ Quita encontrada (minimización): ${res.x:,.2f}")
+            if abs(tir_resultante - tir_objetivo) < 0.05:
                 return float(res.x)
-    except Exception as e:
-        if codigo in ["60272", "80379"]:
-            print(f"  ⚠️ Minimización falló: {e}")
-    
-    # Si todo falla, retornar None
-    if codigo in ["60272", "80379"]:
-        print(f"  ❌ No se pudo encontrar quita para TIR objetivo {tir_objetivo*100:.0f}%")
-    
+    except:
+        pass
+
     return None
 
 # ----------------------------
 # Simular por grupo
 # ----------------------------
 def simular_grupo(grupo):
-    """Aplica simulación de quita para alcanzar TIR objetivo"""
     grupo = grupo.copy()
-    codigo = first_value_safe(grupo, "Codigo")
-    
     tir_obj = parse_debajo(grupo["DebajoDel100"].iloc[0] if "DebajoDel100" in grupo.columns else np.nan)
 
-    
     if tir_obj is None:
-        # Sin escenario de quita, solo calcular TIR
         grupo["TIR_Simulada"] = calcular_xirr(grupo)
         grupo["QuitaSimulada"] = np.nan
-        grupo = grupo.reset_index(drop=True)
-        return grupo
-    
-    if codigo in ["60272", "80379"]:
-        print(f"\n🎯 Simulando código {codigo} para TIR objetivo: {tir_obj*100:.0f}%")
-    
-    # Buscar la quita necesaria
+        return grupo.reset_index(drop=True)
+
     quita = buscar_quita_robusta(grupo, tir_obj)
-    
+
     if quita is not None and quita > 0:
-        # Aplicar la quita
         mask = (grupo["PeriodoYMD"] == MES_ACTUAL) & (grupo["TipoDato"] == "Diferencia")
-        
         if mask.any():
             grupo.loc[mask, "Monto"] = quita
             grupo.loc[mask, "QuitaSimulada"] = quita
         else:
             new_row = {
-                "Codigo": codigo,
+                "Codigo": first_value_safe(grupo, "Codigo"),
                 "NombreCompleto": first_value_safe(grupo, "NombreCompleto"),
                 "Sucursal": first_value_safe(grupo, "Sucursal"),
                 "Bloque": first_value_safe(grupo, "Bloque"),
@@ -492,35 +393,26 @@ def simular_grupo(grupo):
             grupo = pd.concat([grupo, pd.DataFrame([new_row])], ignore_index=True)
     else:
         grupo["QuitaSimulada"] = np.nan
-    
-    # Recalcular TIR simulada
+
     grupo["TIR_Simulada"] = calcular_xirr(grupo)
-    
-    if codigo in ["60272", "80379"]:
-        print(f"  TIR Simulada: {grupo['TIR_Simulada'].iloc[0]*100:.2f}%")
-    grupo = grupo.reset_index(drop=True)
-    return grupo
+    return grupo.reset_index(drop=True)
 
 # ----------------------------
 # Ajustar quita según escenarios y recalcular TIR
 # ----------------------------
 def calcular_quita_ajustada(grupo):
-    """Ajusta la quita según límites del escenario y recalcula TIR"""
     grupo = grupo.copy()
 
     def regla(row):
         quita_sim = row["QuitaSimulada"]
         if pd.isna(quita_sim):
             return np.nan
-
         cobranza = row["TotalCobranzaEstimada"]
         tape = row["TotalCapitalTape"]
-
         if pd.isna(cobranza):
             cobranza = float('inf')
         if pd.isna(tape):
             tape = float('inf')
-
         if row["DebajoDel100"] == 5:
             return min(quita_sim, cobranza, tape * 0.7)
         elif row["DebajoDel100"] == 50:
@@ -531,7 +423,6 @@ def calcular_quita_ajustada(grupo):
             return quita_sim
 
     grupo["QuitaAjustada"] = grupo.apply(regla, axis=1)
-
     mask = (grupo["TipoDato"] == "Diferencia") & (grupo["PeriodoYMD"] == MES_ACTUAL)
 
     if mask.any() and not pd.isna(grupo["QuitaAjustada"].iloc[0]):
@@ -543,20 +434,25 @@ def calcular_quita_ajustada(grupo):
             grupo["TIR_Ajustada"] = grupo["TIR_Simulada"]
     else:
         grupo["TIR_Ajustada"] = grupo["TIR_Simulada"]
-    grupo = grupo.reset_index(drop=True)
-    return grupo
 
-print("🔁 Ejecutando simulación de quitas...")
-_grupos = []
-for _keys, _grupo in df_escenarios.groupby(["Codigo","DebajoDel100"], group_keys=False):
-    _grupos.append(simular_grupo(_grupo))
-df_simulado = pd.concat(_grupos, ignore_index=True)
+    return grupo.reset_index(drop=True)
 
-print("⚙️ Ajustando quitas según límites...")
-_grupos = []
-for _keys, _grupo in df_simulado.groupby(["Codigo","DebajoDel100"], group_keys=False):
-    _grupos.append(calcular_quita_ajustada(_grupo))
-df_simulado = pd.concat(_grupos, ignore_index=True)
+# ----------------------------
+# Simulación
+# ----------------------------
+grupos_sim = list(df_escenarios.groupby(["Codigo","DebajoDel100"], group_keys=False))
+print(f"🔁 Ejecutando simulación de quitas ({len(grupos_sim)} grupos)...")
+_resultados = []
+for _keys, _grupo in tqdm(grupos_sim, desc="Simulando", unit="grupo"):
+    _resultados.append(simular_grupo(_grupo))
+df_simulado = pd.concat(_resultados, ignore_index=True)
+
+grupos_aj = list(df_simulado.groupby(["Codigo","DebajoDel100"], group_keys=False))
+print(f"⚙️ Ajustando quitas según límites ({len(grupos_aj)} grupos)...")
+_resultados = []
+for _keys, _grupo in tqdm(grupos_aj, desc="Ajustando", unit="grupo"):
+    _resultados.append(calcular_quita_ajustada(_grupo))
+df_simulado = pd.concat(_resultados, ignore_index=True)
 
 # ----------------------------
 # Generar resumen
@@ -571,14 +467,8 @@ df_resumen = df_simulado[
     "TIR","DebajoDel100","TIR_Simulada","QuitaSimulada","QuitaAjustada","TIR_Ajustada"
 ]].drop_duplicates(subset=["Codigo","DebajoDel100"])
 
-# Guardar CSV
 df_resumen.to_csv("Resumen_Simulado.csv", index=False, encoding="utf-8-sig")
 print(f"✅ Resumen_Simulado.csv generado: {len(df_resumen)} filas")
-
-# Mostrar muestra para código 60272
-if "60272" in df_resumen["Codigo"].values:
-    print("\n📊 Resultados para código 60272:")
-    print(df_resumen[df_resumen["Codigo"] == "60272"][["Codigo","TIR","DebajoDel100","TIR_Simulada","QuitaSimulada","QuitaAjustada","TIR_Ajustada"]].to_string(index=False))
 
 # ----------------------------
 # Subir a BigQuery
@@ -591,26 +481,17 @@ TABLA_SIMULACION = "Simulacion_de_quitas"
 try:
     client = bigquery.Client(project=PROYECTO_BQ)
     table_id = f"{PROYECTO_BQ}.{DATASET_BQ}.{TABLA_SIMULACION}"
-
     job_config = bigquery.LoadJobConfig(
         write_disposition=bigquery.WriteDisposition.WRITE_TRUNCATE,
         source_format=bigquery.SourceFormat.CSV,
         skip_leading_rows=1,
         autodetect=True
     )
-
     with open("Resumen_Simulado.csv", "rb") as source_file:
         job = client.load_table_from_file(source_file, table_id, job_config=job_config)
         job.result()
-    
     print(f"✅ Tabla {table_id} actualizada: {job.output_rows} filas")
 except Exception as e:
     print(f"⚠️ Error subiendo a BigQuery: {e}")
 
-
 print("\n🎉 Proceso completado exitosamente")
-
-
-
-
-
