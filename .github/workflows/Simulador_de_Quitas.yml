@@ -1,4 +1,4 @@
-name: Simulador de Quitas - Semanal
+﻿name: Simulador de Quitas - Semanal
 
 on:
   schedule:
@@ -20,7 +20,7 @@ jobs:
 
       - name: Instalar dependencias
         run: |
-          pip install pandas numpy scipy gdown google-cloud-bigquery pyarrow
+          pip install pandas numpy scipy gdown google-cloud-bigquery pyarrow tqdm
 
       - name: Configurar credenciales GCP
         env:
@@ -42,3 +42,4 @@ jobs:
       - name: Ejecutar simulador_quitas_resumen
         run: |
           python simulador_quitas_final.py
+
