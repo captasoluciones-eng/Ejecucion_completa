@@ -33,7 +33,7 @@ configurar_credenciales()
 # -----------------------------
 # Configuración de parámetros
 # -----------------------------
-file_id = "1BWMw72Jt2XEzoqXzDTOBUH6wtUbeF3Q2"
+file_id = "1suS5QbUgcYBQzEreOlbJYUiHwXfv4gja"
 archivo_csv = "CobranzaEstimadaSucursales.csv"
 proyecto_bq = "lookerstudio-consolidacion"
 dataset_bq = "DatosLooker_USC_V2"
