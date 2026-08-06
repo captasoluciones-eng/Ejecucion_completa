@@ -33,6 +33,7 @@ configurar_credenciales()
 # -----------------------------
 # Configuración de parámetros
 # -----------------------------
+
 file_id = "1BWMw72Jt2XEzoqXzDTOBUH6wtUbeF3Q2"
 archivo_csv = "TodosLosDatosKpiConsolidados.csv"
 proyecto_bq = "lookerstudio-consolidacion"
