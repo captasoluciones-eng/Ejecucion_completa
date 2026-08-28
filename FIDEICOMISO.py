@@ -134,42 +134,73 @@ def indices_de(encabezado, columnas):
 
 def cargar_captavale(rutas):
     """
-    Regla 1: construye el indice {numero de documento: importe SLD} a partir
-    de los reportes de CAPTAVALE.
+    Regla 1: construye el indice de documentos de CAPTAVALE.
+
+    Se mantiene UN INDICE POR ARCHIVO en lugar de uno solo combinado. Cuesta
+    lo mismo, pero permite demostrar despues cuantas coincidencias aporto
+    cada archivo: si CAPTA 2 aporta coincidencias, quedo probado que se leyo.
 
     Nota: CAPTA 1 y CAPTA 2 no son reportes independientes, son un mismo
-    export partido por el limite de 1,000,000 de filas. Por eso se cargan
-    juntos en un solo indice.
+    export partido por el limite de 1,000,000 de filas del origen.
+
+    Devuelve (indices, estadisticas) donde indices es una lista de dicts
+    {numero de documento: importe SLD}, uno por archivo.
     """
-    indice = {}
-    duplicados = 0
-    total = 0
+    indices = []
+    estadisticas = []
 
     for ruta in rutas:
-        print(f"  Leyendo {Path(ruta).name} ...", flush=True)
+        ruta = Path(ruta)
+        print(f"  Leyendo {ruta.name} ...", flush=True)
+
+        indice = {}
+        filas = 0
+        duplicados_internos = 0
+
         with open(ruta, "r", encoding="utf-8-sig", newline="") as fh:
             lector = csv.reader(fh)
             try:
                 encabezado = next(lector)
             except StopIteration:
-                continue
-            idx = indices_de(encabezado, COLS_CAPTA)
+                encabezado = []
+            if encabezado:
+                idx = indices_de(encabezado, COLS_CAPTA)
+                for fila in lector:
+                    if len(fila) <= idx["documento"]:
+                        continue
+                    documento = fila[idx["documento"]].strip()
+                    if not documento:
+                        continue
+                    filas += 1
+                    if documento in indice:
+                        duplicados_internos += 1
+                        continue
+                    indice[documento] = a_numero(fila[idx["importe"]])
 
-            for fila in lector:
-                if len(fila) <= idx["documento"]:
-                    continue
-                documento = fila[idx["documento"]].strip()
-                if not documento:
-                    continue
-                total += 1
-                if documento in indice:
-                    duplicados += 1
-                    continue
-                indice[documento] = a_numero(fila[idx["importe"]])
+        indices.append(indice)
+        estadisticas.append({
+            "archivo": ruta.name,
+            "tamano_mb": round(ruta.stat().st_size / 1024 / 1024, 1),
+            "filas": filas,
+            "documentos_unicos": len(indice),
+            "duplicados_internos": duplicados_internos,
+            "coincidencias": 0,   # se llena durante el cruce
+        })
+        print(f"    {filas:,} filas -> {len(indice):,} documentos unicos"
+              + (f" ({duplicados_internos:,} duplicados)" if duplicados_internos else ""))
 
-    print(f"  CAPTAVALE: {total:,} filas -> {len(indice):,} documentos unicos "
-          f"({duplicados:,} duplicados ignorados)")
-    return indice
+    # Un documento que aparezca en los dos archivos indicaria traslape entre
+    # ellos, es decir que NO son un export partido limpiamente.
+    traslape = 0
+    if len(indices) == 2:
+        chico, grande = sorted(indices, key=len)
+        traslape = sum(1 for d in chico if d in grande)
+
+    total_unicos = sum(len(d) for d in indices)
+    print(f"  CAPTAVALE: {total_unicos:,} documentos unicos en total, "
+          f"{traslape:,} traslapados entre archivos")
+
+    return indices, estadisticas, traslape
 
 
 def iter_fideicomiso(ruta):
@@ -294,21 +325,43 @@ def clasificar_contrato(documentos):
 # Proceso principal
 # --------------------------------------------------------------------------
 
-def conciliar(indice_capta, ruta_fideicomiso):
-    """Aplica las reglas 1 a 4 recorriendo el FIDEICOMISO una sola vez."""
+def conciliar(indices, estadisticas, ruta_fideicomiso):
+    """
+    Aplica las reglas 1 a 4 recorriendo el FIDEICOMISO una sola vez.
+
+    Ademas de conciliar, deja rastro de evidencia: cuantas coincidencias
+    aporto cada archivo de CAPTAVALE y que documentos de CAPTAVALE nunca
+    fueron usados. Eso permite verificar que ambos archivos se leyeron y que
+    el resultado es consistente en las dos direcciones.
+    """
     total = 0
     encontrados = 0
     diferencias = []
     no_encontrados_por_contrato = defaultdict(list)
+
+    # Documentos de CAPTAVALE efectivamente usados, por archivo.
+    usados = [set() for _ in indices]
 
     for contrato, documento, importe, concepto, subtipo in iter_fideicomiso(ruta_fideicomiso):
         total += 1
         if total % 250_000 == 0:
             print(f"    {total:,} filas procesadas ...", flush=True)
 
-        if documento in indice_capta:          # Regla 1
+        # Regla 1: se busca en cada archivo por separado para saber cual
+        # de los dos aporto la coincidencia.
+        origen = None
+        importe_sld = None
+        for i, indice in enumerate(indices):
+            if documento in indice:
+                origen = i
+                importe_sld = indice[documento]
+                break
+
+        if origen is not None:
             encontrados += 1
-            importe_sld = indice_capta[documento]
+            estadisticas[origen]["coincidencias"] += 1
+            usados[origen].add(documento)
+
             diferencia = abs(importe - importe_sld)
             if diferencia > TOLERANCIA_IMPORTE:  # Regla 3
                 diferencias.append({
@@ -317,6 +370,7 @@ def conciliar(indice_capta, ruta_fideicomiso):
                     "cartera_vn": importe,
                     "importe_sld": importe_sld,
                     "diferencia": round(diferencia, 4),
+                    "origen": estadisticas[origen]["archivo"],
                 })
         else:                                   # Regla 2
             no_encontrados_por_contrato[contrato].append({  # Regla 4
@@ -328,7 +382,22 @@ def conciliar(indice_capta, ruta_fideicomiso):
                 "importe": importe,
             })
 
-    return total, encontrados, diferencias, no_encontrados_por_contrato
+    # Verificaciones cruzadas
+    for i, st in enumerate(estadisticas):
+        st["documentos_usados"] = len(usados[i])
+        st["documentos_sin_usar"] = st["documentos_unicos"] - len(usados[i])
+
+    distintos_usados = sum(len(u) for u in usados)
+    verificacion = {
+        # Si el FIDEICOMISO trae el mismo documento mas de una vez, hay mas
+        # coincidencias que documentos distintos de CAPTAVALE utilizados.
+        "documentos_repetidos_fideicomiso": encontrados - distintos_usados,
+        # Documentos que estan en CAPTAVALE pero no aparecen en el
+        # FIDEICOMISO: el cruce en sentido inverso.
+        "captavale_sin_contraparte": sum(st["documentos_sin_usar"] for st in estadisticas),
+    }
+
+    return total, encontrados, diferencias, no_encontrados_por_contrato, verificacion
 
 
 def escribir_csv(ruta, columnas, filas):
@@ -351,6 +420,9 @@ ANCHOS = {
 }
 FORMATO_IMPORTE = {"cartera_vn", "importe_sld", "diferencia"}
 
+COLS_DETALLE_XLSX = ["contrato", "documento", "letra", "terminacion", "concepto",
+                     "subtipo", "cartera_vn", "clasificacion_contrato"]
+
 TITULOS = {
     "contrato": "Numero de Contrato",
     "documento": "Numero de Documento",
@@ -364,6 +436,7 @@ TITULOS = {
     "clasificacion_contrato": "Clasificacion del contrato",
     "documentos": "Documentos no encontrados",
     "clasificacion": "Clasificacion",
+    "origen": "Archivo CAPTAVALE de origen",
 }
 
 
@@ -398,10 +471,18 @@ def _hoja_de_datos(libro, titulo, columnas, filas):
     return hoja
 
 
-def escribir_excel(ruta, resumen, detalle_no_enc, diferencias, detalle_contratos):
+def escribir_excel(ruta, resumen, por_clase, diferencias, detalle_contratos):
     """
-    Genera un unico archivo .xlsx con cuatro hojas, pensado para abrirse
-    directamente en Excel sin ningun paso intermedio.
+    Genera el archivo .xlsx entregable.
+
+    Hojas:
+        Resumen                cifras principales y control de integridad
+        Verificacion           evidencia de que ambos archivos se leyeron
+        CSTI (regla 5)         documentos de contratos clasificados CSTI
+        STI (regla 6)          documentos de contratos clasificados STI
+        Excluidos              solo si existen
+        Diferencias importe    conciliados con monto distinto
+        Contratos              un renglon por contrato
     """
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
@@ -409,13 +490,19 @@ def escribir_excel(ruta, resumen, detalle_no_enc, diferencias, detalle_contratos
     libro = Workbook()
     libro.remove(libro.active)          # quita la hoja vacia por defecto
 
-    # ---- Hoja Resumen ----
+    titulo_font = Font(bold=True, size=15, color="1F4E5F")
+    seccion_fill = PatternFill("solid", fgColor="EDF1F2")
+
+    # ------------------------------------------------------------------
+    # Hoja Resumen
+    # ------------------------------------------------------------------
     hoja = libro.create_sheet("Resumen")
-    hoja.column_dimensions["A"].width = 42
+    hoja.column_dimensions["A"].width = 44
     hoja.column_dimensions["B"].width = 20
+    hoja.sheet_view.showGridLines = False
 
     hoja["A1"] = f"CONCILIACION {resumen['clave']}"
-    hoja["A1"].font = Font(bold=True, size=15, color="1F4E5F")
+    hoja["A1"].font = titulo_font
     hoja["A2"] = "FIDEICOMISO contra CAPTAVALE"
     hoja["A2"].font = Font(italic=True, color="666666")
 
@@ -428,9 +515,12 @@ def escribir_excel(ruta, resumen, detalle_no_enc, diferencias, detalle_contratos
         ("", ""),
         ("Sin contraparte", resumen["no_encontrados"]),
         ("   contratos afectados", resumen["contratos_no_encontrados"]),
-        ("   documentos CSTI", resumen["documentos_csti"]),
-        ("   documentos STI", resumen["documentos_sti"]),
-        ("   documentos excluidos", resumen["documentos_excluidos"]),
+        ("", ""),
+        ("CSTI (regla 5)", resumen["documentos_csti"]),
+        ("   en contratos", resumen["contratos_csti"]),
+        ("STI (regla 6)", resumen["documentos_sti"]),
+        ("   en contratos", resumen["contratos_sti"]),
+        ("Excluidos", resumen["documentos_excluidos"]),
         ("", ""),
         ("Control de integridad (regla 7)", resumen["control_integridad"]),
     ]
@@ -456,13 +546,97 @@ def escribir_excel(ruta, resumen, detalle_no_enc, diferencias, detalle_contratos
         celda.font = Font(bold=True, color="FFFFFF")
         celda.fill = PatternFill("solid", fgColor="1B6E45" if cuadra else "B03A2E")
 
-    # ---- Hojas de detalle ----
-    _hoja_de_datos(libro, "No encontrados",
-                   ["contrato", "documento", "letra", "terminacion", "concepto",
-                    "subtipo", "cartera_vn", "clasificacion_contrato"],
-                   detalle_no_enc)
+    # ------------------------------------------------------------------
+    # Hoja Verificacion: evidencia de que ambos archivos se leyeron
+    # ------------------------------------------------------------------
+    ver = libro.create_sheet("Verificacion")
+    ver.sheet_view.showGridLines = False
+    for col, ancho in zip("ABCDEF", (34, 14, 16, 20, 18, 18)):
+        ver.column_dimensions[col].width = ancho
+
+    ver["A1"] = "VERIFICACION DE LECTURA"
+    ver["A1"].font = titulo_font
+    ver["A2"] = ("Cada archivo de CAPTAVALE se indexa por separado, de modo que "
+                 "se puede comprobar cuantas coincidencias aporto cada uno.")
+    ver["A2"].font = Font(italic=True, color="666666")
+
+    encabezado = ["Archivo", "Tamano MB", "Filas leidas", "Documentos unicos",
+                  "Coincidencias", "Sin usar"]
+    ver.append([])
+    ver.append(encabezado)
+    fila_enc = ver.max_row
+    for celda in ver[fila_enc]:
+        celda.font = Font(bold=True, color="FFFFFF")
+        celda.fill = PatternFill("solid", fgColor="1F4E5F")
+
+    for st in resumen["archivos_captavale"]:
+        ver.append([st["archivo"], st["tamano_mb"], st["filas"],
+                    st["documentos_unicos"], st["coincidencias"],
+                    st.get("documentos_sin_usar", 0)])
+        for c in ver[ver.max_row][1:]:
+            c.number_format = "#,##0"
+
+    # Marca en rojo cualquier archivo que no haya aportado coincidencias:
+    # seria la senal de que no se leyo o de que no corresponde.
+    for i, st in enumerate(resumen["archivos_captavale"]):
+        if st["coincidencias"] == 0:
+            for c in ver[fila_enc + 1 + i]:
+                c.fill = PatternFill("solid", fgColor="F5D5D0")
+
+    ver.append([])
+    ver.append(["COMPROBACIONES CRUZADAS"])
+    ver[ver.max_row][0].font = Font(bold=True)
+    ver[ver.max_row][0].fill = seccion_fill
+
+    comprobaciones = [
+        ("Documentos traslapados entre CAPTA 1 y CAPTA 2",
+         resumen["traslape_entre_archivos"],
+         "Debe ser 0: los archivos son un mismo export partido, no se repiten."),
+        ("Documentos repetidos dentro del FIDEICOMISO",
+         resumen["documentos_repetidos_fideicomiso"],
+         "Filas del fideicomiso que apuntan a un documento ya contado."),
+        ("Documentos de CAPTAVALE sin contraparte",
+         resumen["captavale_sin_contraparte"],
+         "Cruce inverso: estan en CAPTAVALE pero no en el fideicomiso."),
+    ]
+    for etiqueta, valor, nota in comprobaciones:
+        ver.append([etiqueta, valor, "", nota])
+        fila = ver[ver.max_row]
+        fila[1].number_format = "#,##0"
+        fila[1].font = Font(bold=True)
+        fila[3].font = Font(color="666666", size=9)
+
+    ver.append([])
+    ver.append(["CUADRE DE TOTALES"])
+    ver[ver.max_row][0].font = Font(bold=True)
+    ver[ver.max_row][0].fill = seccion_fill
+
+    total_unicos = sum(st["documentos_unicos"] for st in resumen["archivos_captavale"])
+    total_coincidencias = sum(st["coincidencias"] for st in resumen["archivos_captavale"])
+    cuadres = [
+        ("Conciliados + sin contraparte", resumen["encontrados"] + resumen["no_encontrados"]),
+        ("   debe igualar documentos revisados", resumen["filas_fideicomiso"]),
+        ("Coincidencias sumadas de ambos archivos", total_coincidencias),
+        ("   debe igualar conciliados", resumen["encontrados"]),
+        ("Documentos unicos de CAPTAVALE", total_unicos),
+    ]
+    for etiqueta, valor in cuadres:
+        ver.append([etiqueta, valor])
+        ver[ver.max_row][1].number_format = "#,##0"
+        if not etiqueta.startswith("   "):
+            ver[ver.max_row][0].font = Font(bold=True)
+
+    # ------------------------------------------------------------------
+    # Hojas de detalle
+    # ------------------------------------------------------------------
+    _hoja_de_datos(libro, "CSTI (regla 5)", COLS_DETALLE_XLSX, por_clase["CSTI"])
+    _hoja_de_datos(libro, "STI (regla 6)", COLS_DETALLE_XLSX, por_clase["STI"])
+    if por_clase["EXCLUIDO"]:
+        _hoja_de_datos(libro, "Excluidos", COLS_DETALLE_XLSX, por_clase["EXCLUIDO"])
+
     _hoja_de_datos(libro, "Diferencias importe",
-                   ["contrato", "documento", "cartera_vn", "importe_sld", "diferencia"],
+                   ["contrato", "documento", "cartera_vn", "importe_sld",
+                    "diferencia", "origen"],
                    diferencias)
     _hoja_de_datos(libro, "Contratos",
                    ["contrato", "documentos", "clasificacion"],
@@ -507,20 +681,25 @@ def main():
     print("=" * 60)
 
     print("\n[1/3] Cargando CAPTAVALE ...")
-    indice = cargar_captavale(capta)
+    indices, estadisticas, traslape = cargar_captavale(capta)
 
     print(f"\n[2/3] Recorriendo {fideicomiso.name} ...")
-    total, encontrados, diferencias, no_enc = conciliar(indice, fideicomiso)
+    total, encontrados, diferencias, no_enc, verificacion = conciliar(
+        indices, estadisticas, fideicomiso)
 
     print("\n[3/3] Clasificando contratos no encontrados ...")
+    # Reglas 5 y 6 en listas separadas: cada una va a su propia hoja.
+    por_clase = {"CSTI": [], "STI": [], "EXCLUIDO": []}
     detalle_no_enc = []
     detalle_contratos = []
     conteo = {"CSTI": 0, "STI": 0, "EXCLUIDO": 0}
+    contratos_por_clase = {"CSTI": 0, "STI": 0, "EXCLUIDO": 0}
     no_encontrados = 0
 
     for contrato, documentos in no_enc.items():
         clase = clasificar_contrato(documentos)          # Reglas 5 y 6
         conteo[clase] += len(documentos)
+        contratos_por_clase[clase] += 1
         no_encontrados += len(documentos)
 
         detalle_contratos.append({
@@ -529,7 +708,7 @@ def main():
             "clasificacion": clase,
         })
         for d in documentos:
-            detalle_no_enc.append({
+            registro = {
                 "contrato": contrato,
                 "documento": d["documento"],
                 "letra": d["letra"],
@@ -538,7 +717,9 @@ def main():
                 "subtipo": d["subtipo"],
                 "cartera_vn": d["importe"],
                 "clasificacion_contrato": clase,
-            })
+            }
+            detalle_no_enc.append(registro)
+            por_clase[clase].append(registro)
 
     # Regla 7: control de integridad
     suma = conteo["CSTI"] + conteo["STI"] + conteo["EXCLUIDO"]
@@ -554,18 +735,27 @@ def main():
         "documentos_csti": conteo["CSTI"],
         "documentos_sti": conteo["STI"],
         "documentos_excluidos": conteo["EXCLUIDO"],
+        "contratos_csti": contratos_por_clase["CSTI"],
+        "contratos_sti": contratos_por_clase["STI"],
+        "contratos_excluidos": contratos_por_clase["EXCLUIDO"],
         "control_integridad": "OK" if cuadra else "DESCUADRE",
+        "archivos_captavale": estadisticas,
+        "traslape_entre_archivos": traslape,
+        "documentos_repetidos_fideicomiso": verificacion["documentos_repetidos_fideicomiso"],
+        "captavale_sin_contraparte": verificacion["captavale_sin_contraparte"],
     }
 
     salida = Path(args.salida)
     salida.mkdir(parents=True, exist_ok=True)
 
-    escribir_csv(salida / f"no_encontrados_{args.clave}.csv",
-                 ["contrato", "documento", "letra", "terminacion", "concepto",
-                  "subtipo", "cartera_vn", "clasificacion_contrato"],
-                 detalle_no_enc)
+    COLS_DETALLE = ["contrato", "documento", "letra", "terminacion", "concepto",
+                    "subtipo", "cartera_vn", "clasificacion_contrato"]
+
+    escribir_csv(salida / f"no_encontrados_{args.clave}.csv", COLS_DETALLE, detalle_no_enc)
+    escribir_csv(salida / f"csti_{args.clave}.csv", COLS_DETALLE, por_clase["CSTI"])
+    escribir_csv(salida / f"sti_{args.clave}.csv", COLS_DETALLE, por_clase["STI"])
     escribir_csv(salida / f"diferencias_importe_{args.clave}.csv",
-                 ["contrato", "documento", "cartera_vn", "importe_sld", "diferencia"],
+                 ["contrato", "documento", "cartera_vn", "importe_sld", "diferencia", "origen"],
                  diferencias)
     escribir_csv(salida / f"contratos_{args.clave}.csv",
                  ["contrato", "documentos", "clasificacion"],
@@ -573,9 +763,9 @@ def main():
     with open(salida / f"resumen_{args.clave}.json", "w", encoding="utf-8") as fh:
         json.dump(resumen, fh, indent=2, ensure_ascii=False)
 
-    # Entregable principal: un solo Excel con las cuatro hojas.
+    # Entregable principal: un solo Excel, con las reglas 5 y 6 separadas.
     ruta_excel = salida / f"CONCILIACION {args.clave}.xlsx"
-    escribir_excel(ruta_excel, resumen, detalle_no_enc, diferencias, detalle_contratos)
+    escribir_excel(ruta_excel, resumen, por_clase, diferencias, detalle_contratos)
 
     print("\n" + "=" * 60)
     print(f"RESUMEN {args.clave}")
@@ -591,6 +781,20 @@ def main():
     print("-" * 60)
     print(f"Regla 7 (integridad): {suma:,} == {no_encontrados:,} -> "
           f"{'OK' if cuadra else 'DESCUADRE'}")
+
+    print("-" * 60)
+    print("VERIFICACION DE LECTURA")
+    for st in estadisticas:
+        marca = "OK " if st["coincidencias"] > 0 else "!! "
+        print(f"  {marca}{st['archivo']}")
+        print(f"       {st['filas']:>10,} filas   "
+              f"{st['documentos_unicos']:>10,} unicos   "
+              f"{st['coincidencias']:>10,} coincidencias")
+    print(f"  Traslape entre archivos          {traslape:>12,}  (esperado 0)")
+    print(f"  Repetidos en el FIDEICOMISO      "
+          f"{verificacion['documentos_repetidos_fideicomiso']:>12,}")
+    print(f"  CAPTAVALE sin contraparte        "
+          f"{verificacion['captavale_sin_contraparte']:>12,}")
     print("=" * 60)
     print(f"\nEXCEL: {ruta_excel.resolve()}")
     print(f"Detalle en CSV y resumen JSON: {salida.resolve()}")
