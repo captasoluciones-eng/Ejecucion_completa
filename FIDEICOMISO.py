@@ -42,6 +42,13 @@ La carpeta debe contener:
 Ejemplo:
     python FIDEICOMISO.py "G:/Mi unidad/.../F12540" --clave F12540
 
+SALIDA
+------
+    CONCILIACION <clave>.xlsx    entregable principal, cuatro hojas:
+                                 Resumen, No encontrados, Diferencias
+                                 importe y Contratos.
+    *.csv, resumen_<clave>.json  mismos datos, para uso automatizado.
+
 DEPENDENCIAS
 ------------
     pip install openpyxl
@@ -331,6 +338,139 @@ def escribir_csv(ruta, columnas, filas):
         escritor.writerows(filas)
 
 
+# --------------------------------------------------------------------------
+# Salida en Excel
+# --------------------------------------------------------------------------
+
+# Ancho de columna y formato numerico por nombre de campo.
+ANCHOS = {
+    "contrato": 18, "documento": 20, "letra": 8, "terminacion": 13,
+    "concepto": 12, "subtipo": 20, "cartera_vn": 16, "importe_sld": 18,
+    "diferencia": 14, "clasificacion_contrato": 22, "documentos": 14,
+    "clasificacion": 16,
+}
+FORMATO_IMPORTE = {"cartera_vn", "importe_sld", "diferencia"}
+
+TITULOS = {
+    "contrato": "Numero de Contrato",
+    "documento": "Numero de Documento",
+    "letra": "Letra",
+    "terminacion": "Terminacion",
+    "concepto": "Concepto",
+    "subtipo": "Subtipo Producto",
+    "cartera_vn": "CarteraController Total VN",
+    "importe_sld": "Importe SLD (CAPTAVALE)",
+    "diferencia": "Diferencia",
+    "clasificacion_contrato": "Clasificacion del contrato",
+    "documentos": "Documentos no encontrados",
+    "clasificacion": "Clasificacion",
+}
+
+
+def _hoja_de_datos(libro, titulo, columnas, filas):
+    """Agrega una hoja con encabezado fijo, filtro y formato de importes."""
+    from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
+
+    hoja = libro.create_sheet(titulo)
+
+    encabezado = [TITULOS.get(c, c) for c in columnas]
+    hoja.append(encabezado)
+    for celda in hoja[1]:
+        celda.font = Font(bold=True, color="FFFFFF")
+        celda.fill = PatternFill("solid", fgColor="1F4E5F")
+        celda.alignment = Alignment(vertical="center")
+    hoja.row_dimensions[1].height = 22
+
+    for fila in filas:
+        hoja.append([fila.get(c, "") for c in columnas])
+
+    for i, clave in enumerate(columnas, start=1):
+        letra = get_column_letter(i)
+        hoja.column_dimensions[letra].width = ANCHOS.get(clave, 16)
+        if clave in FORMATO_IMPORTE:
+            for celda in hoja[letra][1:]:
+                celda.number_format = "#,##0.00"
+
+    hoja.freeze_panes = "A2"
+    if filas:
+        hoja.auto_filter.ref = f"A1:{get_column_letter(len(columnas))}{len(filas) + 1}"
+    return hoja
+
+
+def escribir_excel(ruta, resumen, detalle_no_enc, diferencias, detalle_contratos):
+    """
+    Genera un unico archivo .xlsx con cuatro hojas, pensado para abrirse
+    directamente en Excel sin ningun paso intermedio.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Font, PatternFill
+
+    libro = Workbook()
+    libro.remove(libro.active)          # quita la hoja vacia por defecto
+
+    # ---- Hoja Resumen ----
+    hoja = libro.create_sheet("Resumen")
+    hoja.column_dimensions["A"].width = 42
+    hoja.column_dimensions["B"].width = 20
+
+    hoja["A1"] = f"CONCILIACION {resumen['clave']}"
+    hoja["A1"].font = Font(bold=True, size=15, color="1F4E5F")
+    hoja["A2"] = "FIDEICOMISO contra CAPTAVALE"
+    hoja["A2"].font = Font(italic=True, color="666666")
+
+    renglones = [
+        ("", ""),
+        ("Documentos revisados", resumen["filas_fideicomiso"]),
+        ("", ""),
+        ("Conciliados", resumen["encontrados"]),
+        ("   con diferencia de importe", resumen["diferencias_importe"]),
+        ("", ""),
+        ("Sin contraparte", resumen["no_encontrados"]),
+        ("   contratos afectados", resumen["contratos_no_encontrados"]),
+        ("   documentos CSTI", resumen["documentos_csti"]),
+        ("   documentos STI", resumen["documentos_sti"]),
+        ("   documentos excluidos", resumen["documentos_excluidos"]),
+        ("", ""),
+        ("Control de integridad (regla 7)", resumen["control_integridad"]),
+    ]
+
+    fila_actual = 3
+    for etiqueta, valor in renglones:
+        hoja.cell(row=fila_actual, column=1, value=etiqueta)
+        if valor != "":
+            celda = hoja.cell(row=fila_actual, column=2, value=valor)
+            if isinstance(valor, int):
+                celda.number_format = "#,##0"
+                celda.alignment = Alignment(horizontal="right")
+        if etiqueta and not etiqueta.startswith("   "):
+            hoja.cell(row=fila_actual, column=1).font = Font(bold=True)
+            hoja.cell(row=fila_actual, column=2).font = Font(bold=True)
+        fila_actual += 1
+
+    # Resalta el control de integridad: es lo primero que hay que mirar.
+    fila_ctrl = fila_actual - 1
+    cuadra = resumen["control_integridad"] == "OK"
+    for col in (1, 2):
+        celda = hoja.cell(row=fila_ctrl, column=col)
+        celda.font = Font(bold=True, color="FFFFFF")
+        celda.fill = PatternFill("solid", fgColor="1B6E45" if cuadra else "B03A2E")
+
+    # ---- Hojas de detalle ----
+    _hoja_de_datos(libro, "No encontrados",
+                   ["contrato", "documento", "letra", "terminacion", "concepto",
+                    "subtipo", "cartera_vn", "clasificacion_contrato"],
+                   detalle_no_enc)
+    _hoja_de_datos(libro, "Diferencias importe",
+                   ["contrato", "documento", "cartera_vn", "importe_sld", "diferencia"],
+                   diferencias)
+    _hoja_de_datos(libro, "Contratos",
+                   ["contrato", "documentos", "clasificacion"],
+                   detalle_contratos)
+
+    libro.save(ruta)
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Conciliacion FIDEICOMISO vs CAPTAVALE",
@@ -433,6 +573,10 @@ def main():
     with open(salida / f"resumen_{args.clave}.json", "w", encoding="utf-8") as fh:
         json.dump(resumen, fh, indent=2, ensure_ascii=False)
 
+    # Entregable principal: un solo Excel con las cuatro hojas.
+    ruta_excel = salida / f"CONCILIACION {args.clave}.xlsx"
+    escribir_excel(ruta_excel, resumen, detalle_no_enc, diferencias, detalle_contratos)
+
     print("\n" + "=" * 60)
     print(f"RESUMEN {args.clave}")
     print("=" * 60)
@@ -448,7 +592,8 @@ def main():
     print(f"Regla 7 (integridad): {suma:,} == {no_encontrados:,} -> "
           f"{'OK' if cuadra else 'DESCUADRE'}")
     print("=" * 60)
-    print(f"\nResultados escritos en: {salida.resolve()}")
+    print(f"\nEXCEL: {ruta_excel.resolve()}")
+    print(f"Detalle en CSV y resumen JSON: {salida.resolve()}")
 
     if not cuadra:
         sys.exit(1)
