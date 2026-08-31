@@ -1,0 +1,107 @@
+name: Conciliacion FIDEICOMISO
+
+# Se dispara de tres formas:
+#   1. repository_dispatch  -> desde el boton en Google Sheets (Apps Script)
+#   2. workflow_dispatch    -> desde la pestana Actions de GitHub
+#   3. (opcional) schedule  -> descomentar si se quiere corrida automatica
+on:
+  repository_dispatch:
+    types: [conciliar]
+  workflow_dispatch:
+    inputs:
+      clave:
+        description: "Clave del fideicomiso (ej. F12540)"
+        required: true
+        default: "F12540"
+      carpeta_id:
+        description: "ID de la carpeta raiz de Drive (la que contiene F12540, F1551, ...)"
+        required: true
+  # schedule:
+  #   - cron: "0 14 * * 1"   # lunes 8:00 hora de Ciudad de Mexico
+
+# Evita que dos corridas del mismo fideicomiso se pisen entre si.
+concurrency:
+  group: conciliacion-${{ github.event.client_payload.clave || inputs.clave }}
+  cancel-in-progress: false
+
+jobs:
+  conciliar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Leer parametros
+        id: params
+        run: |
+          CLAVE="${{ github.event.client_payload.clave || inputs.clave }}"
+          CARPETA="${{ github.event.client_payload.carpeta_id || inputs.carpeta_id }}"
+
+          if [ -z "$CLAVE" ] || [ -z "$CARPETA" ]; then
+            echo "::error::Faltan parametros: clave='$CLAVE' carpeta_id='$CARPETA'"
+            exit 1
+          fi
+
+          echo "clave=$CLAVE"     >> "$GITHUB_OUTPUT"
+          echo "carpeta=$CARPETA" >> "$GITHUB_OUTPUT"
+          echo "## Conciliacion $CLAVE" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      # Se declaran aqui en vez de en un requirements.txt, para tener un
+      # archivo menos en el repositorio.
+      - name: Instalar dependencias
+        run: |
+          pip install \
+            "openpyxl>=3.1" \
+            "google-api-python-client>=2.100" \
+            "google-auth>=2.23"
+
+      - name: Descargar insumos de Drive
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          python drive_io.py descargar \
+            "${{ steps.params.outputs.carpeta }}" datos \
+            --clave "${{ steps.params.outputs.clave }}"
+
+      - name: Ejecutar conciliacion
+        run: |
+          python FIDEICOMISO.py datos \
+            --clave "${{ steps.params.outputs.clave }}" \
+            --salida salida | tee salida_consola.txt
+
+      - name: Publicar resumen
+        if: always()
+        run: |
+          if [ -f salida_consola.txt ]; then
+            {
+              echo '```'
+              sed -n '/RESUMEN/,$p' salida_consola.txt
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Subir resultado a Drive
+        env:
+          GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
+        run: |
+          python drive_io.py subir \
+            "${{ steps.params.outputs.carpeta }}" \
+            "salida/CONCILIACION ${{ steps.params.outputs.clave }}.xlsx" \
+            --clave "${{ steps.params.outputs.clave }}"
+
+      # Respaldo descargable desde GitHub, por si Drive falla.
+      # Nota: los datos del fideicomiso quedan almacenados en GitHub
+      # durante estos dias. Ajusta o elimina segun la politica interna.
+      - name: Guardar resultados como artefacto
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conciliacion-${{ steps.params.outputs.clave }}
+          path: salida/
+          retention-days: 7
