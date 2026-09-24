@@ -34,8 +34,8 @@ configurar_credenciales()
 # Configuración de parámetros
 # -----------------------------
 
-file_id = "1j2PSLE-dEGWyWFyulJnlKHumYIrmM2Br"
-archivo_csv = "Prueba_Gasto.csv"
+file_id = "1BUwcLugICBYGIdpJzkth4afeIcwwUoCJ"
+archivo_csv = "ReportedeGastos.csv"
 proyecto_bq = "lookerstudio-consolidacion"
 dataset_bq = "DatosLooker_USC_V2"
 tabla_bq = "Reporte_Gastos"
