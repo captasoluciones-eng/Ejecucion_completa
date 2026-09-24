@@ -38,6 +38,9 @@ jobs:
       
       - name: 🚀 Ejecutar KPI.py
         run: python "Kpis's.py"
+        
+      - name: 🚀 Reporte_Gastos.py
+        run: Python "Reporte_Gastos.py"
       
       - name: 🧹 Cleanup
         if: always()
