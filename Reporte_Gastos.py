@@ -50,7 +50,10 @@ def descargar_drive(file_id, destino):
             scopes=["https://www.googleapis.com/auth/drive.readonly"]
         )
         service = build("drive", "v3", credentials=creds)
-        request = service.files().get_media(fileId=file_id)
+        request = service.files().export_media(
+            fileId=file_id,
+            mimeType="text/csv"
+        )
         with open(destino, "wb") as f:
             downloader = MediaIoBaseDownload(f, request)
             done = False
@@ -61,6 +64,7 @@ def descargar_drive(file_id, destino):
     except Exception as e:
         print(f"❌ Error al descargar el archivo: {e}")
         exit(1)
+       
 
 descargar_drive(file_id, archivo_csv)
 # -----------------------------
