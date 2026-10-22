@@ -3,7 +3,7 @@ name: Ejecución Detallado Canje
 on:
   workflow_dispatch:  # Ejecución manual desde GitHub
   schedule:
-    - cron: "0 11 * * *"  # 4:00 AM hora de México (Sinaloa)
+    - cron: "0 * * * *"  # 4:00 AM hora de México (Sinaloa)
 
 jobs:
   run-scripts:
