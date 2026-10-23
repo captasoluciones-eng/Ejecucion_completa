@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import gdown
 from datetime import datetime
-from scipy.optimize import brentq, minimize_scalar
+from scipy.optimize import brentq
 from google.cloud import bigquery
 from tqdm import tqdm
 import warnings
@@ -282,79 +282,34 @@ if "DebajoDel100" not in df_escenarios.columns:
     df_escenarios["DebajoDel100"] = np.nan
 
 # ----------------------------
-# Funciones robustas para buscar la quita
+# Búsqueda de la quita (solución cerrada)
 # ----------------------------
-def objetivo_quita(monto_quita, grupo, tir_objetivo):
-    sim = grupo.copy()
-    mask = (sim["PeriodoYMD"] == MES_ACTUAL) & (sim["TipoDato"] == "Diferencia")
-    if mask.any():
-        sim.loc[mask, "Monto"] = monto_quita
-    else:
-        new_row = {
-            "Codigo": first_value_safe(grupo, "Codigo") or grupo["Codigo"].iloc[0],
-            "NombreCompleto": first_value_safe(grupo, "NombreCompleto"),
-            "Sucursal": first_value_safe(grupo, "Sucursal"),
-            "Bloque": first_value_safe(grupo, "Bloque"),
-            "TotalCapitalTape": first_value_safe(grupo, "TotalCapitalTape"),
-            "TotalCobranzaEstimada": first_value_safe(grupo, "TotalCobranzaEstimada"),
-            "PeriodoYM": MES_ACTUAL.strftime("%Y-%m"),
-            "PeriodoYMD": MES_ACTUAL,
-            "TipoDato": "Diferencia",
-            "Monto": monto_quita,
-            "DebajoDel100": grupo["DebajoDel100"].iloc[0] if "DebajoDel100" in grupo.columns else np.nan
-        }
-        sim = pd.concat([sim, pd.DataFrame([new_row])], ignore_index=True)
-    tir = calcular_xirr(sim)
-    if pd.isna(tir):
-        return 1e12
-    return tir - tir_objetivo
-
+# El VPN a la TIR objetivo es lineal en el monto de la quita, así que se despeja
+# directo. La búsqueda numérica anterior fallaba con historias cortas: el límite
+# superior (2x capital) daba TIR > 1000%, xirr_excel regresaba 0, no había cambio
+# de signo y el código quedaba fuera de Simulacion_de_quitas (sin finiquitos).
 def buscar_quita_robusta(grupo, tir_objetivo):
-    tape = first_value_safe(grupo, "TotalCapitalTape")
-    try:
-        tape = float(tape) if tape is not None else 100000.0
-    except:
-        tape = 100000.0
+    diffs = grupo[grupo["TipoDato"] == "Diferencia"].copy()
+    diffs["PeriodoYMD"] = pd.to_datetime(diffs["PeriodoYMD"], errors="coerce")
+    diffs = diffs.dropna(subset=["PeriodoYMD", "Monto"])
 
-    a = 0.0
-    b = max(tape * 2.0, 100000.0)
+    # La quita reemplaza la Diferencia del mes actual (igual que simular_grupo)
+    otros = diffs[(diffs["PeriodoYMD"] != MES_ACTUAL) & (diffs["Monto"].astype(float) != 0)]
+    otros = otros.sort_values("PeriodoYMD")
+    if otros.empty:
+        return None
 
-    try:
-        fa = objetivo_quita(a, grupo, tir_objetivo)
-        fb = objetivo_quita(b, grupo, tir_objetivo)
-        if not (np.isnan(fa) or np.isnan(fb) or np.isinf(fa) or np.isinf(fb)):
-            if fa * fb < 0:
-                return brentq(lambda x: objetivo_quita(x, grupo, tir_objetivo), a, b, maxiter=500)
-    except:
-        pass
+    t0 = otros["PeriodoYMD"].iloc[0]
+    meses = lambda d: (d.year - t0.year) * 12 + (d.month - t0.month)
 
-    try:
-        for multiplicador in [5, 10, 20, 50, 100]:
-            b = tape * multiplicador
-            fa = objetivo_quita(a, grupo, tir_objetivo)
-            fb = objetivo_quita(b, grupo, tir_objetivo)
-            if not (np.isnan(fa) or np.isnan(fb) or np.isinf(fa) or np.isinf(fb)):
-                if fa * fb < 0:
-                    return brentq(lambda x: objetivo_quita(x, grupo, tir_objetivo), a, b, maxiter=500)
-    except:
-        pass
+    vpn_otros = sum(
+        float(v) / (1 + tir_objetivo) ** (meses(d) / 12.0)
+        for v, d in zip(otros["Monto"], otros["PeriodoYMD"])
+    )
+    quita = -vpn_otros * (1 + tir_objetivo) ** (meses(MES_ACTUAL) / 12.0)
 
-    try:
-        upper = max(tape * 100.0, 500000.0)
-        res = minimize_scalar(
-            lambda x: abs(objetivo_quita(x, grupo, tir_objetivo)),
-            bounds=(0.0, upper),
-            method='bounded',
-            options={'maxiter': 500, 'xatol': 1.0}
-        )
-        if res.success:
-            tir_resultante = calcular_xirr(grupo) + objetivo_quita(res.x, grupo, tir_objetivo)
-            if abs(tir_resultante - tir_objetivo) < 0.05:
-                return float(res.x)
-    except:
-        pass
-
-    return None
+    # quita <= 0: la TIR objetivo ya se cumple sin pago adicional
+    return float(quita) if quita > 0 else None
 
 # ----------------------------
 # Simular por grupo
