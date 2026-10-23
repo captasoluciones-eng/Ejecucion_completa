@@ -17,26 +17,23 @@ warnings.filterwarnings('ignore')
 # ----------------------------
 #os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = r"C:\PyScripts\lookerstudio-consolidacion-c10dd284ce9d.json"
 def configurar_credenciales():
-    # 0. Variable de entorno ya seteada externamente
-    if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
-        print("✅ Usando credenciales de variable de entorno")
-        return
-
-    # 1. GitHub Actions
+    """Detecta el entorno y configura las credenciales apropiadas"""
+    
+    # 1. GitHub Actions (busca credenciales en el home del usuario)
     github_creds = os.path.expanduser("~/gcp_credentials.json")
     if os.path.exists(github_creds):
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = github_creds
         print("✅ Usando credenciales de GitHub Actions")
         return
-
+    
     # 2. PC Local (Windows)
     local_creds = r"C:\PyScripts\lookerstudio-consolidacion-c10dd284ce9d.json"
     if os.path.exists(local_creds):
         os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = local_creds
         print("✅ Usando credenciales locales")
         return
-
-    # 3. Google Colab
+    
+    # 3. Google Colab (usa autenticación nativa)
     try:
         from google.colab import auth
         auth.authenticate_user()
@@ -44,7 +41,8 @@ def configurar_credenciales():
         return
     except ImportError:
         pass
-
+    
+    # Si no encontró ninguna credencial
     print("❌ No se encontraron credenciales de GCP")
     raise EnvironmentError("No se pudo configurar la autenticación con Google Cloud")
 
@@ -83,8 +81,7 @@ for key, fid in ARCHIVOS_DRIVE.items():
     try:
         # ✅ Descargar con fuzzy=False para evitar problemas
         print(f"  ⏳ Descargando {key}.csv...")
-        gdown.download(url, out, quiet=False)
-
+        gdown.download(url, out, quiet=False, fuzzy=False)
         
         # Verificar que se descargó correctamente
         if os.path.exists(out) and os.path.getsize(out) > 0:
@@ -180,7 +177,9 @@ def calcular_xirr(grupo):
     """
     Calcula la TIR similar a Excel TIR.NO.PER:
     - Ignora ceros iniciales
-    - Retorna 0 si no hay suficientes flujos positivos para generar TIR
+    - Retorna 0 si no hay suficientes flujos para generar TIR
+    - Retorna -1 (pérdida total) si nunca hubo flujo positivo
+    - TIR negativa se conserva (antes se recortaba a 0 y parecía "a mano")
     - Usa meses como periodo (DIAS360 / 30)
     """
     diffs = grupo[grupo["TipoDato"] == "Diferencia"].copy()
@@ -201,6 +200,10 @@ def calcular_xirr(grupo):
     if len(flujos) < 2:
         return 0.0  # Excel devuelve 0 si no hay suficientes flujos
 
+    # Solo salidas (canje sin ningún abono): pérdida total
+    if any(v < 0 for v in flujos) and not any(v > 0 for v in flujos):
+        return -1.0
+
     # Validación: debe haber al menos un flujo positivo y uno negativo
     if not (any(v < 0 for v in flujos) and any(v > 0 for v in flujos)):
         return 0.0
@@ -213,15 +216,16 @@ def calcular_xirr(grupo):
 
     # Intentar encontrar la raíz con Brentq
     try:
-        tir = brentq(lambda r: xnpv(r, flujos, fechas), -0.99, 10)
+        # Límite inferior cercano a -100%: con historia corta y mucha deuda la TIR real queda en -99.99%
+        tir = brentq(lambda r: xnpv(r, flujos, fechas), -0.9999999, 10)
     except ValueError:
-        # Si no hay raíz positiva, retornar 0
+        # Si no hay raíz, retornar 0
         tir = 0.0
     except Exception:
         tir = 0.0
 
-    # Limitar tir al rango [0, 200%] como máximo
-    tir = max(0.0, tir)
+    # Limitar tir al rango [-100%, 200%]
+    tir = max(-1.0, tir)
     tir = min(2.0, tir)
 
     return tir
@@ -329,6 +333,4 @@ def subir_a_bq(df, tabla):
 
 subir_a_bq(df_long, TABLA_CONSOLIDADO)
 
-
 print("\n✅ Proceso completado exitosamente")
-
